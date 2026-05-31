@@ -99,6 +99,34 @@ QString hudStyleSheet()
         QTextEdit#logBox QScrollBar::sub-line:vertical {
             height: 0px;
         }
+        QMessageBox {
+            background: #050912;
+            color: #d9f0ff;
+        }
+        QMessageBox QLabel {
+            color: #d9f0ff;
+            font-size: 13px;
+            font-weight: 700;
+            background: transparent;
+        }
+        QMessageBox QPushButton {
+            min-width: 76px;
+            min-height: 30px;
+            color: #eaf8ff;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                        stop:0 #123d63, stop:1 #071221);
+            border: 1px solid #3fb6ff;
+            border-radius: 4px;
+            font-weight: 800;
+        }
+        QMessageBox QPushButton:hover {
+            background: #15588c;
+            border-color: #8ee0ff;
+        }
+        QMessageBox QPushButton:pressed {
+            background: #061a30;
+            border-color: #c7f2ff;
+        }
     )");
 }
 
