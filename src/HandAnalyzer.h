@@ -40,6 +40,17 @@ struct CandidatePlay {
     HandAnalysis analysis;
 };
 
+struct ArrangedGroup {
+    int startIndex = 0;
+    int cardCount = 0;
+    HandAnalysis analysis;
+};
+
+struct ArrangedHand {
+    std::vector<Card> cards;
+    std::vector<ArrangedGroup> groups;
+};
+
 class HandAnalyzer {
 public:
     static HandAnalysis analyze(const std::vector<Card>& cards, Rank level);
@@ -51,6 +62,7 @@ public:
         Rank level,
         const std::optional<HandAnalysis>& previous = std::nullopt);
     static std::vector<Card> arrangeHand(const std::vector<Card>& hand, Rank level);
+    static ArrangedHand arrangeHandWithGroups(const std::vector<Card>& hand, Rank level);
 
 private:
     static HandAnalysis analyzeWithoutWildcards(const std::vector<Card>& cards, Rank level);

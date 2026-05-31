@@ -50,7 +50,6 @@ void MainWindow::makeUi()
     playButton_ = new QPushButton(QStringLiteral("出牌"), root);
     passButton_ = new QPushButton(QStringLiteral("过牌"), root);
     hintButton_ = new QPushButton(QStringLiteral("提示"), root);
-    sortButton_ = new QPushButton(QStringLiteral("一键理牌"), root);
     logBox_ = new QTextEdit(root);
     logBox_->setReadOnly(true);
     logBox_->setMinimumWidth(260);
@@ -59,7 +58,6 @@ void MainWindow::makeUi()
     side->addWidget(playButton_);
     side->addWidget(passButton_);
     side->addWidget(hintButton_);
-    side->addWidget(sortButton_);
     side->addWidget(new QLabel(QStringLiteral("牌局记录"), root));
     side->addWidget(logBox_, 1);
     center->addLayout(side);
@@ -75,8 +73,8 @@ void MainWindow::makeUi()
     connect(playButton_, &QPushButton::clicked, this, &MainWindow::playCards);
     connect(passButton_, &QPushButton::clicked, this, &MainWindow::passTurn);
     connect(hintButton_, &QPushButton::clicked, this, &MainWindow::hint);
-    connect(sortButton_, &QPushButton::clicked, this, &MainWindow::sortHand);
     connect(table_, &TableWidget::selectionChanged, this, &MainWindow::refreshUi);
+    connect(table_, &TableWidget::arrangeRequested, this, &MainWindow::sortHand);
 }
 
 void MainWindow::newHumanVsAiGame()
@@ -162,7 +160,6 @@ void MainWindow::refreshUi()
     playButton_->setEnabled(acceptingInput && !table_->selectedCardIds().empty());
     passButton_->setEnabled(acceptingInput && engine_.canCurrentPlayerPass());
     hintButton_->setEnabled(acceptingInput);
-    sortButton_->setEnabled(acceptingInput);
     nextDealButton_->setEnabled(true);
 
     statusLabel_->setText(QString::fromStdString(engine_.tableStatus()));

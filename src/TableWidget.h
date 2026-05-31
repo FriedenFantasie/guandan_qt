@@ -23,6 +23,7 @@ public:
 
 signals:
     void selectionChanged();
+    void arrangeRequested();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -35,11 +36,14 @@ private slots:
 private:
     QRect cardRectForIndex(int index, int count, const QRect& area, bool selected) const;
     void drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive);
+    void drawHandGroupHints(QPainter& painter, const std::vector<guandan::Card>& hand, const std::vector<QRect>& cardRects);
     void drawLastCards(QPainter& painter, int playerId, const QRect& area);
     void drawActionText(QPainter& painter, int playerId, const QRect& area);
     void drawBombEffect(QPainter& painter, const QRect& area, qreal progress, const QPoint& offset);
     void drawSettlementOverlay(QPainter& painter);
+    void drawArrangeButton(QPainter& painter, const QRect& playerArea);
     void drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected);
+    bool canUseArrangeButton() const;
     QString playerLabel(int playerId) const;
     int visualPlayerForSeat(int seat) const;
     QPoint animationOffsetForPlayer(int playerId) const;
@@ -47,6 +51,7 @@ private:
     guandan::GameEngine* engine_ = nullptr;
     std::set<int> selectedIds_;
     std::vector<std::pair<int, QRect>> clickableCards_;
+    QRect arrangeButtonRect_;
     QElapsedTimer animationClock_;
     QTimer* animationTimer_ = nullptr;
     int animatingPlayer_ = -1;

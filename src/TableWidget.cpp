@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <string>
@@ -63,6 +64,48 @@ QString placeText(int place)
     case 4: return QStringLiteral("末游");
     default: return QStringLiteral("-");
     }
+}
+
+bool sameCardOrder(const std::vector<guandan::Card>& left, const std::vector<guandan::Card>& right)
+{
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        if (left[i].id != right[i].id) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool shouldShowGroupHint(const guandan::ArrangedGroup& group)
+{
+    switch (group.analysis.type) {
+    case guandan::HandType::Straight:
+    case guandan::HandType::ConsecutivePairs:
+    case guandan::HandType::ConsecutiveTriples:
+    case guandan::HandType::TripleWithPair:
+    case guandan::HandType::Bomb:
+    case guandan::HandType::StraightFlush:
+    case guandan::HandType::JokerBomb:
+        return true;
+    default:
+        return false;
+    }
+}
+
+QColor groupHintColor(int index)
+{
+    const std::array<QColor, 6> colors = {
+        QColor(248, 210, 82, 226),
+        QColor(108, 198, 255, 218),
+        QColor(134, 226, 139, 218),
+        QColor(255, 145, 112, 218),
+        QColor(205, 164, 255, 218),
+        QColor(255, 231, 136, 218)
+    };
+    return colors[static_cast<std::size_t>(index) % colors.size()];
 }
 
 class CardPixmapCache {
@@ -209,8 +252,10 @@ void TableWidget::paintEvent(QPaintEvent*)
     }
 
     clickableCards_.clear();
+    arrangeButtonRect_ = {};
 
     const QRect bottom(width() / 2 - 390, height() - 145, 780, 126);
+    const QRect bottomCards = bottom.adjusted(0, 0, -180, 0);
     const QRect top(width() / 2 - 300, 28, 600, 110);
     const QRect left(25, height() / 2 - 105, 230, 170);
     const QRect right(width() - 255, height() / 2 - 105, 230, 170);
@@ -218,7 +263,8 @@ void TableWidget::paintEvent(QPaintEvent*)
     drawPlayerHand(painter, visualPlayerForSeat(2), top, false, false);
     drawPlayerHand(painter, visualPlayerForSeat(1), left, false, false);
     drawPlayerHand(painter, visualPlayerForSeat(3), right, false, false);
-    drawPlayerHand(painter, visualPlayerForSeat(0), bottom, true, true);
+    drawPlayerHand(painter, visualPlayerForSeat(0), bottomCards, true, true);
+    drawArrangeButton(painter, bottom);
 
     drawLastCards(painter, visualPlayerForSeat(2), QRect(width() / 2 - 210, 154, 420, 110));
     drawLastCards(painter, visualPlayerForSeat(1), QRect(width() / 2 - 360, height() / 2 - 70, 260, 110));
@@ -251,6 +297,10 @@ void TableWidget::updateActionAnimation()
 void TableWidget::mousePressEvent(QMouseEvent* event)
 {
     if (!engine_ || engine_->phase() != guandan::GamePhase::Playing) {
+        return;
+    }
+    if (canUseArrangeButton() && arrangeButtonRect_.contains(event->pos())) {
+        emit arrangeRequested();
         return;
     }
     for (auto it = clickableCards_.rbegin(); it != clickableCards_.rend(); ++it) {
@@ -293,14 +343,21 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
     }
 
     const int count = static_cast<int>(player.hand.size());
+    std::vector<QRect> cardRects;
+    cardRects.reserve(player.hand.size());
     for (int i = 0; i < count; ++i) {
         const guandan::Card& card = player.hand[i];
         const bool selected = selectedIds_.count(card.id) > 0 && interactive;
         const QRect cardRect = cardRectForIndex(i, count, area, selected);
+        cardRects.push_back(cardRect);
         drawCard(painter, cardRect, card, faceUp, selected);
         if (interactive && faceUp) {
             clickableCards_.push_back({ card.id, cardRect });
         }
+    }
+
+    if (interactive && faceUp) {
+        drawHandGroupHints(painter, player.hand, cardRects);
     }
 
     if (!faceUp) {
@@ -308,6 +365,58 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
         painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
         painter.drawText(area.adjusted(0, kCardHeight + 2, 0, 0), Qt::AlignCenter,
                          QStringLiteral("余牌 %1").arg(count));
+    }
+}
+
+void TableWidget::drawHandGroupHints(QPainter& painter, const std::vector<guandan::Card>& hand, const std::vector<QRect>& cardRects)
+{
+    if (!engine_ || hand.empty() || hand.size() != cardRects.size()) {
+        return;
+    }
+
+    const guandan::ArrangedHand arranged = guandan::HandAnalyzer::arrangeHandWithGroups(hand, engine_->currentLevel());
+    if (!sameCardOrder(hand, arranged.cards)) {
+        return;
+    }
+
+    int visibleGroupIndex = 0;
+    for (const guandan::ArrangedGroup& group : arranged.groups) {
+        if (!shouldShowGroupHint(group)) {
+            continue;
+        }
+        if (group.startIndex < 0 || group.cardCount <= 0 ||
+            group.startIndex + group.cardCount > static_cast<int>(cardRects.size())) {
+            continue;
+        }
+
+        const QRect first = cardRects[static_cast<std::size_t>(group.startIndex)];
+        const QRect last = cardRects[static_cast<std::size_t>(group.startIndex + group.cardCount - 1)];
+        const int left = first.left() + 3;
+        const int right = last.right() - 3;
+        if (right <= left) {
+            continue;
+        }
+
+        const QColor color = groupHintColor(visibleGroupIndex++);
+        const QRect labelRect(left, std::max(first.bottom() - 17, first.top() + 68), right - left, 22);
+
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.addRoundedRect(labelRect, 7, 7);
+        painter.fillPath(path, QColor(color.red(), color.green(), color.blue(), 216));
+        painter.setPen(QPen(QColor(31, 37, 38, 218), 1));
+        painter.drawPath(path);
+
+        painter.setPen(QColor(23, 31, 34));
+        painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9, QFont::Bold));
+        painter.drawText(labelRect.adjusted(5, 0, -5, 0),
+                         Qt::AlignCenter,
+                         QString::fromStdString(group.analysis.typeName()));
+
+        painter.setPen(QPen(color.lighter(130), 3));
+        painter.drawLine(QPoint(left + 3, first.bottom() + 4), QPoint(right - 3, first.bottom() + 4));
+        painter.restore();
     }
 }
 
@@ -512,6 +621,40 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
     painter.restore();
 }
 
+void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
+{
+    if (!canUseArrangeButton()) {
+        arrangeButtonRect_ = {};
+        return;
+    }
+
+    arrangeButtonRect_ = QRect(playerArea.right() - 126,
+                               playerArea.bottom() - 36,
+                               116,
+                               32);
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QPainterPath shadow;
+    shadow.addRoundedRect(arrangeButtonRect_.translated(0, 3), 9, 9);
+    painter.fillPath(shadow, QColor(0, 0, 0, 70));
+
+    QPainterPath button;
+    button.addRoundedRect(arrangeButtonRect_, 9, 9);
+    QLinearGradient gradient(arrangeButtonRect_.topLeft(), arrangeButtonRect_.bottomLeft());
+    gradient.setColorAt(0.0, QColor(255, 243, 150));
+    gradient.setColorAt(1.0, QColor(239, 176, 55));
+    painter.fillPath(button, gradient);
+    painter.setPen(QPen(QColor(87, 61, 19), 1));
+    painter.drawPath(button);
+
+    painter.setPen(QColor(43, 34, 18));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
+    painter.drawText(arrangeButtonRect_, Qt::AlignCenter, QStringLiteral("一键理牌"));
+    painter.restore();
+}
+
 void TableWidget::drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected)
 {
     const bool wild = engine_ && guandan::isWildCard(card, engine_->currentLevel());
@@ -543,6 +686,13 @@ int TableWidget::visualPlayerForSeat(int seat) const
         return 0;
     }
     return seat;
+}
+
+bool TableWidget::canUseArrangeButton() const
+{
+    return engine_ &&
+           engine_->phase() == guandan::GamePhase::Playing &&
+           engine_->isCurrentPlayerHuman();
 }
 
 QPoint TableWidget::animationOffsetForPlayer(int playerId) const

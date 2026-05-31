@@ -398,7 +398,7 @@ std::string HandAnalysis::typeName() const
     case HandType::Triple: return "三同张";
     case HandType::Straight: return "顺子";
     case HandType::ConsecutivePairs: return "三连对";
-    case HandType::ConsecutiveTriples: return "二连三";
+    case HandType::ConsecutiveTriples: return "钢板";
     case HandType::TripleWithPair: return "三带对";
     case HandType::Bomb: return "炸弹";
     case HandType::StraightFlush: return "同花顺";
@@ -753,11 +753,16 @@ std::vector<CandidatePlay> HandAnalyzer::generateCandidatePlays(
 
 std::vector<Card> HandAnalyzer::arrangeHand(const std::vector<Card>& hand, Rank level)
 {
+    return arrangeHandWithGroups(hand, level).cards;
+}
+
+ArrangedHand HandAnalyzer::arrangeHandWithGroups(const std::vector<Card>& hand, Rank level)
+{
     std::vector<CandidatePlay> plays = generateCandidatePlays(hand, level);
     std::sort(plays.begin(), plays.end(), playLessForArrange);
 
-    std::vector<Card> arranged;
-    arranged.reserve(hand.size());
+    ArrangedHand arranged;
+    arranged.cards.reserve(hand.size());
     std::unordered_set<int> usedIds;
 
     for (const CandidatePlay& play : plays) {
@@ -766,10 +771,12 @@ std::vector<Card> HandAnalyzer::arrangeHand(const std::vector<Card>& hand, Rank 
         }
 
         std::vector<Card> cards = displayOrderedCards(play, level);
+        const int startIndex = static_cast<int>(arranged.cards.size());
         for (const Card& card : cards) {
-            arranged.push_back(card);
+            arranged.cards.push_back(card);
             usedIds.insert(card.id);
         }
+        arranged.groups.push_back({ startIndex, static_cast<int>(cards.size()), play.analysis });
     }
 
     std::vector<Card> leftovers;
@@ -779,7 +786,7 @@ std::vector<Card> HandAnalyzer::arrangeHand(const std::vector<Card>& hand, Rank 
         }
     }
     sortHand(leftovers, level);
-    arranged.insert(arranged.end(), leftovers.begin(), leftovers.end());
+    arranged.cards.insert(arranged.cards.end(), leftovers.begin(), leftovers.end());
     return arranged;
 }
 

@@ -137,8 +137,10 @@ void testSmartArrangeGroupsCombinations()
         c(6, Suit::Diamonds, Rank::Three)
     };
 
-    const std::vector<Card> arranged = HandAnalyzer::arrangeHand(hand, level);
+    const ArrangedHand arrangedHand = HandAnalyzer::arrangeHandWithGroups(hand, level);
+    const std::vector<Card>& arranged = arrangedHand.cards;
     assert(arranged.size() == hand.size());
+    assert(arrangedHand.groups.size() >= 3);
 
     std::set<int> originalIds;
     std::set<int> arrangedIds;
@@ -157,6 +159,9 @@ void testSmartArrangeGroupsCombinations()
     assert(HandAnalyzer::analyze(firstGroup, level).type == HandType::StraightFlush);
     assert(HandAnalyzer::analyze(secondGroup, level).type == HandType::ConsecutiveTriples);
     assert(HandAnalyzer::analyze(thirdGroup, level).type == HandType::TripleWithPair);
+    assert(arrangedHand.groups[0].analysis.type == HandType::StraightFlush);
+    assert(arrangedHand.groups[1].analysis.type == HandType::ConsecutiveTriples);
+    assert(arrangedHand.groups[2].analysis.type == HandType::TripleWithPair);
 }
 
 void testEngineDealAndAiLegality()
