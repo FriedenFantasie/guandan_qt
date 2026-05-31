@@ -5,8 +5,9 @@
 #include <QElapsedTimer>
 #include <QWidget>
 
-#include <map>
 #include <set>
+#include <utility>
+#include <vector>
 
 class TableWidget : public QWidget {
     Q_OBJECT
@@ -36,6 +37,7 @@ private:
     void drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive);
     void drawLastCards(QPainter& painter, int playerId, const QRect& area);
     void drawActionText(QPainter& painter, int playerId, const QRect& area);
+    void drawBombEffect(QPainter& painter, const QRect& area, qreal progress, const QPoint& offset);
     void drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected);
     QString playerLabel(int playerId) const;
     int visualPlayerForSeat(int seat) const;
@@ -43,7 +45,7 @@ private:
 
     guandan::GameEngine* engine_ = nullptr;
     std::set<int> selectedIds_;
-    std::map<int, QRect> clickableCards_;
+    std::vector<std::pair<int, QRect>> clickableCards_;
     QElapsedTimer animationClock_;
     QTimer* animationTimer_ = nullptr;
     int animatingPlayer_ = -1;

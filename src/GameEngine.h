@@ -40,6 +40,7 @@ struct PlayerAction {
     int sequence = 0;
     bool pass = false;
     std::string text;
+    bool bomb = false;
 };
 
 class GameEngine {

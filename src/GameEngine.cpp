@@ -180,7 +180,7 @@ bool GameEngine::playSelectedCards(int playerId, const std::vector<int>& cardIds
 
     lastPlay_ = { playerId, selected, analysis };
     lastShownCards_[playerId] = selected;
-    lastActions_[playerId] = { ++actionSequence_, false, analysis.typeName() };
+    lastActions_[playerId] = { ++actionSequence_, false, analysis.typeName(), analysis.isBombLike() };
     passCount_ = 0;
 
     std::ostringstream out;
@@ -213,7 +213,7 @@ bool GameEngine::pass(int playerId, std::string* error)
     }
 
     lastShownCards_[playerId].clear();
-    lastActions_[playerId] = { ++actionSequence_, true, "过牌" };
+    lastActions_[playerId] = { ++actionSequence_, true, "过牌", false };
     appendLog(players_[playerId].name + " 过牌。");
     afterPass(playerId);
     return true;
