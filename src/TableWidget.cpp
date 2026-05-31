@@ -815,11 +815,12 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
 
 void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
 {
-    if (!canUseArrangeButton()) {
+    if (!engine_ || engine_->phase() != guandan::GamePhase::Playing) {
         arrangeButtonRect_ = {};
         return;
     }
 
+    const bool enabled = canUseArrangeButton();
     arrangeButtonRect_ = QRect(playerArea.right() - 126,
                                playerArea.bottom() - 36,
                                116,
@@ -835,16 +836,16 @@ void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
     QPainterPath button;
     button.addRoundedRect(arrangeButtonRect_, 9, 9);
     QLinearGradient gradient(arrangeButtonRect_.topLeft(), arrangeButtonRect_.bottomLeft());
-    gradient.setColorAt(0.0, QColor(42, 47, 57));
-    gradient.setColorAt(1.0, QColor(12, 15, 21));
+    gradient.setColorAt(0.0, enabled ? QColor(42, 47, 57) : QColor(22, 25, 31));
+    gradient.setColorAt(1.0, enabled ? QColor(12, 15, 21) : QColor(8, 10, 13));
     painter.fillPath(button, gradient);
-    painter.setPen(QPen(QColor(255, 143, 44, 216), 1));
+    painter.setPen(QPen(enabled ? QColor(255, 143, 44, 216) : QColor(120, 129, 138, 92), 1));
     painter.drawPath(button);
-    painter.setPen(QPen(QColor(156, 211, 246, 110), 1));
+    painter.setPen(QPen(enabled ? QColor(156, 211, 246, 110) : QColor(120, 129, 138, 52), 1));
     painter.drawLine(arrangeButtonRect_.left() + 12, arrangeButtonRect_.top() + 4,
                      arrangeButtonRect_.right() - 12, arrangeButtonRect_.top() + 4);
 
-    painter.setPen(QColor(255, 224, 186));
+    painter.setPen(enabled ? QColor(255, 224, 186) : QColor(126, 137, 146));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
     painter.drawText(arrangeButtonRect_, Qt::AlignCenter, QStringLiteral("一键理牌"));
     painter.restore();

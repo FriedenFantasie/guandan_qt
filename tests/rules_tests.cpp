@@ -184,6 +184,32 @@ void testEngineDealAndAiLegality()
     assert(aiEngine.phase() == GamePhase::Playing || aiEngine.phase() == GamePhase::RoundOver);
 }
 
+void testPlayPreservesCurrentHandOrder()
+{
+    GameEngine engine;
+    engine.startNewGame(GameMode::LocalFour);
+    engine.arrangeCurrentPlayerHand();
+
+    const int playerId = engine.currentPlayer();
+    const std::vector<Card> arranged = engine.player(playerId).hand;
+    assert(!arranged.empty());
+
+    const int playedId = arranged.front().id;
+    std::vector<int> expectedIds;
+    for (std::size_t i = 1; i < arranged.size(); ++i) {
+        expectedIds.push_back(arranged[i].id);
+    }
+
+    std::string error;
+    assert(engine.playSelectedCards(playerId, { playedId }, &error));
+
+    const std::vector<Card>& remaining = engine.player(playerId).hand;
+    assert(remaining.size() == expectedIds.size());
+    for (std::size_t i = 0; i < remaining.size(); ++i) {
+        assert(remaining[i].id == expectedIds[i]);
+    }
+}
+
 void testFullDealCanFinish()
 {
     GameEngine engine;
@@ -216,6 +242,7 @@ int main()
     testComparison();
     testSmartArrangeGroupsCombinations();
     testEngineDealAndAiLegality();
+    testPlayPreservesCurrentHandOrder();
     testFullDealCanFinish();
     std::cout << "All Guandan rule tests passed.\n";
     return 0;
