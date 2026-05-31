@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/cards">
+        <file>icons/app_icon.ico</file>
         <file>icons/rebel.svg</file>
         <file>icons/empire.svg</file>
     </qresource>

@@ -22,7 +22,28 @@ target_include_directories(guandan_core PUBLIC src)
 
 find_package(Qt6 COMPONENTS Widgets Svg REQUIRED)
 
+set(APP_ICON_RESOURCE "")
+if(WIN32)
+    enable_language(RC)
+    set(APP_ICON_RESOURCE "${CMAKE_CURRENT_BINARY_DIR}/app_icon_res.o")
+    add_custom_command(
+        OUTPUT "${APP_ICON_RESOURCE}"
+        COMMAND "${CMAKE_COMMAND}" -E chdir
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+                "${CMAKE_RC_COMPILER}" -O coff -i app_icon.rc -o "${APP_ICON_RESOURCE}"
+        DEPENDS
+            resources/app_icon.rc
+            resources/icons/app_icon.ico
+        VERBATIM
+    )
+    set_source_files_properties("${APP_ICON_RESOURCE}" PROPERTIES
+        GENERATED TRUE
+        EXTERNAL_OBJECT TRUE
+    )
+endif()
+
 add_executable(GuandanQt WIN32
+    ${APP_ICON_RESOURCE}
     resources/cards.qrc
     src/MainWindow.cpp
     src/TableWidget.cpp
