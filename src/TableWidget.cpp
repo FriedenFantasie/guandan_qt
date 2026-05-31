@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 
 namespace {
@@ -14,6 +15,7 @@ namespace {
 constexpr int kCardWidth = 72;
 constexpr int kCardHeight = 104;
 constexpr int kActionAnimationMs = 560;
+constexpr qreal kPi = 3.14159265358979323846;
 
 QColor suitColor(guandan::Suit suit, guandan::Rank rank)
 {
@@ -230,7 +232,9 @@ void TableWidget::mousePressEvent(QMouseEvent* event)
     if (!engine_) {
         return;
     }
-    for (const auto& [id, rect] : clickableCards_) {
+    for (auto it = clickableCards_.rbegin(); it != clickableCards_.rend(); ++it) {
+        const int id = it->first;
+        const QRect& rect = it->second;
         if (rect.contains(event->pos())) {
             if (selectedIds_.count(id)) {
                 selectedIds_.erase(id);
@@ -274,7 +278,7 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
         const QRect cardRect = cardRectForIndex(i, count, area, selected);
         drawCard(painter, cardRect, card, faceUp, selected);
         if (interactive && faceUp) {
-            clickableCards_[card.id] = cardRect;
+            clickableCards_.push_back({ card.id, cardRect });
         }
     }
 
@@ -298,9 +302,16 @@ void TableWidget::drawLastCards(QPainter& painter, int playerId, const QRect& ar
     const bool animating = playerId == animatingPlayer_ && !action.pass;
     const qreal progress = animating ? animationProgress_ : 1.0;
     const QPoint offset = animating ? animationOffsetForPlayer(playerId) * (1.0 - progress) : QPoint();
+    const int shake = action.bomb && animating
+        ? static_cast<int>(std::sin(progress * kPi * 10.0) * (1.0 - progress) * 7.0)
+        : 0;
 
     painter.save();
     painter.setOpacity(0.45 + 0.55 * progress);
+
+    if (action.bomb) {
+        drawBombEffect(painter, area, progress, offset);
+    }
 
     painter.setPen(QColor(236, 240, 230));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9));
@@ -313,8 +324,10 @@ void TableWidget::drawLastCards(QPainter& painter, int playerId, const QRect& ar
     const int spacing = std::min(34, area.width() / std::max(1, count));
     const int fullWidth = spacing * (count - 1) + miniWidth;
     int x = area.center().x() - fullWidth / 2 + offset.x();
-    for (const guandan::Card& card : cards) {
-        QRect rect(x, area.top() + 20 + offset.y(), miniWidth, miniHeight);
+    for (int i = 0; i < count; ++i) {
+        const guandan::Card& card = cards[i];
+        const int jitter = shake == 0 ? 0 : (i % 2 == 0 ? shake : -shake);
+        QRect rect(x + jitter, area.top() + 20 + offset.y(), miniWidth, miniHeight);
         drawCard(painter, rect, card, true, false);
         x += spacing;
     }
@@ -349,6 +362,47 @@ void TableWidget::drawActionText(QPainter& painter, int playerId, const QRect& a
 
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 13, QFont::Bold));
     painter.drawText(bubble, Qt::AlignCenter, QString::fromStdString(action.text));
+    painter.restore();
+}
+
+void TableWidget::drawBombEffect(QPainter& painter, const QRect& area, qreal progress, const QPoint& offset)
+{
+    const qreal fade = std::max<qreal>(0.0, 1.0 - progress);
+    if (fade <= 0.0) {
+        return;
+    }
+
+    const QPointF center = area.center() + offset;
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setOpacity(fade);
+
+    const qreal radius = 24.0 + 84.0 * progress;
+    painter.setBrush(QColor(255, 210, 68, static_cast<int>(115 * fade)));
+    painter.setPen(QPen(QColor(255, 246, 174, static_cast<int>(210 * fade)), 3));
+    painter.drawEllipse(center, radius * 0.62, radius * 0.35);
+
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(QColor(255, 112, 48, static_cast<int>(230 * fade)), 5));
+    painter.drawEllipse(center, radius, radius * 0.58);
+    painter.setPen(QPen(QColor(255, 232, 96, static_cast<int>(190 * fade)), 2));
+    painter.drawEllipse(center, radius * 1.25, radius * 0.72);
+
+    painter.setPen(QPen(QColor(255, 236, 128, static_cast<int>(230 * fade)), 3));
+    for (int i = 0; i < 14; ++i) {
+        const qreal angle = (kPi * 2.0 * i / 14.0) + progress * 0.7;
+        const qreal inner = 28.0 + 30.0 * progress;
+        const qreal outer = 58.0 + 74.0 * progress;
+        const QPointF start(center.x() + std::cos(angle) * inner,
+                            center.y() + std::sin(angle) * inner * 0.58);
+        const QPointF end(center.x() + std::cos(angle) * outer,
+                          center.y() + std::sin(angle) * outer * 0.58);
+        painter.drawLine(start, end);
+    }
+
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 15, QFont::Bold));
+    painter.setPen(QColor(82, 28, 9, static_cast<int>(235 * fade)));
+    painter.drawText(QRectF(center.x() - 48, center.y() - 16, 96, 32), Qt::AlignCenter, QStringLiteral("炸弹"));
     painter.restore();
 }
 
