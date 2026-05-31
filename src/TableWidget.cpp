@@ -481,6 +481,16 @@ QRect TableWidget::cardRectForIndex(int index, int count, const QRect& area, boo
     return QRect(startX + index * overlapWidth, y, kCardWidth, kCardHeight);
 }
 
+QRect TableWidget::hiddenStackRect(const QRect& area) const
+{
+    constexpr int stackWidth = 60;
+    constexpr int stackHeight = 86;
+    return QRect(area.center().x() - stackWidth / 2,
+                 area.top() + (area.height() - stackHeight) / 2,
+                 stackWidth,
+                 stackHeight);
+}
+
 void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive)
 {
     const guandan::Player& player = engine_->player(playerId);
@@ -502,6 +512,34 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
     }
 
     const int count = static_cast<int>(player.hand.size());
+
+    if (!faceUp) {
+        if (count > 0) {
+            const QRect stack = hiddenStackRect(area);
+            painter.save();
+            painter.setRenderHint(QPainter::Antialiasing);
+            const int visibleDepth = std::min(count, 4);
+            for (int layer = visibleDepth - 1; layer >= 1; --layer) {
+                const QRect layerRect = stack.translated(layer * 3, layer * 3);
+                QPainterPath layerPath;
+                layerPath.addRoundedRect(layerRect, 7, 7);
+                painter.fillPath(layerPath, QColor(4, 6, 10, 178));
+                painter.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), 62), 1));
+                painter.drawPath(layerPath);
+            }
+            painter.restore();
+
+            drawCard(painter, stack, player.hand.front(), false, false, backStyle);
+
+            const QRect countBadge(stack.center().x() - 44, stack.bottom() + 6, 88, 22);
+            drawHudPanel(painter, countBadge, accent);
+            painter.setPen(QColor(220, 233, 241));
+            painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10, QFont::Bold));
+            painter.drawText(countBadge, Qt::AlignCenter, QStringLiteral("余牌 %1").arg(count));
+        }
+        return;
+    }
+
     std::vector<QRect> cardRects;
     cardRects.reserve(player.hand.size());
     for (int i = 0; i < count; ++i) {
@@ -517,13 +555,6 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
 
     if (interactive && faceUp) {
         drawHandGroupHints(painter, player.hand, cardRects);
-    }
-
-    if (!faceUp) {
-        painter.setPen(QColor(210, 224, 232));
-        painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
-        painter.drawText(area.adjusted(0, kCardHeight + 2, 0, 0), Qt::AlignCenter,
-                         QStringLiteral("余牌 %1").arg(count));
     }
 }
 

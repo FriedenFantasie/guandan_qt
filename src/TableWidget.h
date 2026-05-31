@@ -41,6 +41,7 @@ private slots:
 
 private:
     QRect cardRectForIndex(int index, int count, const QRect& area, bool selected) const;
+    QRect hiddenStackRect(const QRect& area) const;
     void drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive);
     void drawHandGroupHints(QPainter& painter, const std::vector<guandan::Card>& hand, const std::vector<QRect>& cardRects);
     void drawLastCards(QPainter& painter, int playerId, const QRect& area);
