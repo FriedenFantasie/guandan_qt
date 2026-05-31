@@ -24,11 +24,13 @@ private slots:
     void sortHand();
     void nextDeal();
     void refreshUi();
+    void runAiTurn();
 
 private:
     void makeUi();
     void showMessage(const QString& message);
     void syncLog();
+    void scheduleAiTurn();
 
     guandan::GameEngine engine_;
     TableWidget* table_ = nullptr;
@@ -39,5 +41,5 @@ private:
     QPushButton* hintButton_ = nullptr;
     QPushButton* sortButton_ = nullptr;
     QPushButton* nextDealButton_ = nullptr;
+    bool aiTurnPending_ = false;
 };
-

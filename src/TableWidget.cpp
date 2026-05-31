@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QTimer>
 
 #include <algorithm>
 #include <map>
@@ -12,6 +13,7 @@ namespace {
 
 constexpr int kCardWidth = 72;
 constexpr int kCardHeight = 104;
+constexpr int kActionAnimationMs = 560;
 
 QColor suitColor(guandan::Suit suit, guandan::Rank rank)
 {
@@ -119,12 +121,24 @@ TableWidget::TableWidget(QWidget* parent)
 {
     setMouseTracking(true);
     setAutoFillBackground(false);
+    animationTimer_ = new QTimer(this);
+    animationTimer_->setInterval(16);
+    connect(animationTimer_, &QTimer::timeout, this, &TableWidget::updateActionAnimation);
 }
 
 void TableWidget::setEngine(guandan::GameEngine* engine)
 {
     engine_ = engine;
     clearSelection();
+    update();
+}
+
+void TableWidget::beginActionAnimation(int playerId)
+{
+    animatingPlayer_ = playerId;
+    animationProgress_ = 0.0;
+    animationClock_.restart();
+    animationTimer_->start();
     update();
 }
 
@@ -197,6 +211,20 @@ void TableWidget::paintEvent(QPaintEvent*)
     painter.drawText(QRect(34, 26, 430, 26), Qt::AlignLeft, QString::fromStdString(engine_->tableStatus()));
 }
 
+void TableWidget::updateActionAnimation()
+{
+    if (animatingPlayer_ < 0) {
+        animationTimer_->stop();
+        return;
+    }
+
+    animationProgress_ = std::min<qreal>(1.0, static_cast<qreal>(animationClock_.elapsed()) / kActionAnimationMs);
+    if (animationProgress_ >= 1.0) {
+        animationTimer_->stop();
+    }
+    update();
+}
+
 void TableWidget::mousePressEvent(QMouseEvent* event)
 {
     if (!engine_) {
@@ -261,25 +289,67 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
 void TableWidget::drawLastCards(QPainter& painter, int playerId, const QRect& area)
 {
     const std::vector<guandan::Card>& cards = engine_->lastShownCards()[playerId];
+    const guandan::PlayerAction& action = engine_->lastActions()[playerId];
     if (cards.empty()) {
+        drawActionText(painter, playerId, area);
         return;
     }
 
+    const bool animating = playerId == animatingPlayer_ && !action.pass;
+    const qreal progress = animating ? animationProgress_ : 1.0;
+    const QPoint offset = animating ? animationOffsetForPlayer(playerId) * (1.0 - progress) : QPoint();
+
+    painter.save();
+    painter.setOpacity(0.45 + 0.55 * progress);
+
     painter.setPen(QColor(236, 240, 230));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9));
-    painter.drawText(area.adjusted(0, -20, 0, 0), Qt::AlignTop | Qt::AlignHCenter, playerLabel(playerId));
+    painter.drawText(area.adjusted(0, -20, 0, 0).translated(offset), Qt::AlignTop | Qt::AlignHCenter,
+                     QString::fromStdString(action.text.empty() ? std::string("出牌") : action.text));
 
     const int count = static_cast<int>(cards.size());
     const int miniWidth = 46;
     const int miniHeight = 66;
     const int spacing = std::min(34, area.width() / std::max(1, count));
     const int fullWidth = spacing * (count - 1) + miniWidth;
-    int x = area.center().x() - fullWidth / 2;
+    int x = area.center().x() - fullWidth / 2 + offset.x();
     for (const guandan::Card& card : cards) {
-        QRect rect(x, area.top() + 20, miniWidth, miniHeight);
+        QRect rect(x, area.top() + 20 + offset.y(), miniWidth, miniHeight);
         drawCard(painter, rect, card, true, false);
         x += spacing;
     }
+    painter.restore();
+}
+
+void TableWidget::drawActionText(QPainter& painter, int playerId, const QRect& area)
+{
+    const guandan::PlayerAction& action = engine_->lastActions()[playerId];
+    if (action.text.empty()) {
+        return;
+    }
+
+    const bool animating = playerId == animatingPlayer_;
+    const qreal progress = animating ? animationProgress_ : 1.0;
+    const QPoint offset = animating ? animationOffsetForPlayer(playerId) * (1.0 - progress) : QPoint();
+
+    const QRect bubble = QRect(area.center().x() - 56 + offset.x(),
+                               area.center().y() - 18 + offset.y(),
+                               112,
+                               36);
+
+    painter.save();
+    painter.setOpacity(0.40 + 0.60 * progress);
+
+    QPainterPath path;
+    path.addRoundedRect(bubble, 10, 10);
+    const QColor fill = action.pass ? QColor(25, 35, 42, 205) : QColor(250, 246, 222, 220);
+    painter.fillPath(path, fill);
+    painter.setPen(QPen(action.pass ? QColor(226, 232, 220) : QColor(75, 52, 22), 1));
+    painter.drawPath(path);
+
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 13, QFont::Bold));
+    painter.drawText(bubble, Qt::AlignCenter, QString::fromStdString(action.text));
+    painter.restore();
 }
 
 void TableWidget::drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected)
@@ -315,3 +385,18 @@ int TableWidget::visualPlayerForSeat(int seat) const
     return seat;
 }
 
+QPoint TableWidget::animationOffsetForPlayer(int playerId) const
+{
+    int seat = playerId;
+    if (engine_ && engine_->mode() == guandan::GameMode::LocalFour) {
+        seat = (playerId - engine_->currentPlayer() + 4) % 4;
+    }
+
+    switch (seat) {
+    case 0: return QPoint(0, 86);
+    case 1: return QPoint(-120, 0);
+    case 2: return QPoint(0, -90);
+    case 3: return QPoint(120, 0);
+    default: return QPoint();
+    }
+}

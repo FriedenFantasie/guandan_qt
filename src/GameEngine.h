@@ -36,6 +36,12 @@ struct PlayedTrick {
     bool empty() const { return player < 0 || !analysis.valid(); }
 };
 
+struct PlayerAction {
+    int sequence = 0;
+    bool pass = false;
+    std::string text;
+};
+
 class GameEngine {
 public:
     GameEngine();
@@ -59,6 +65,7 @@ public:
     GamePhase phase() const { return phase_; }
     const PlayedTrick& lastPlay() const { return lastPlay_; }
     const std::array<std::vector<Card>, 4>& lastShownCards() const { return lastShownCards_; }
+    const std::array<PlayerAction, 4>& lastActions() const { return lastActions_; }
     const std::vector<int>& finishOrder() const { return finishOrder_; }
     const std::vector<std::string>& log() const { return log_; }
     int dealNumber() const { return dealNumber_; }
@@ -93,6 +100,7 @@ private:
     std::array<Player, 4> players_;
     std::array<Rank, 2> teamLevels_ = { Rank::Two, Rank::Two };
     std::array<std::vector<Card>, 4> lastShownCards_;
+    std::array<PlayerAction, 4> lastActions_;
     std::vector<int> previousFinishOrder_;
     std::vector<int> finishOrder_;
     std::vector<std::string> log_;
@@ -106,7 +114,7 @@ private:
     int starterPlayer_ = 0;
     int passCount_ = 0;
     int dealNumber_ = 0;
+    int actionSequence_ = 0;
 };
 
 } // namespace guandan
-

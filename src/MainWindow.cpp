@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "AiPlayer.h"
+
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,6 +17,7 @@ MainWindow::MainWindow(QWidget* parent)
     makeUi();
     engine_.startNewGame(guandan::GameMode::HumanVsAi);
     refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::makeUi()
@@ -78,13 +81,16 @@ void MainWindow::makeUi()
 
 void MainWindow::newHumanVsAiGame()
 {
+    aiTurnPending_ = false;
     engine_.startNewGame(guandan::GameMode::HumanVsAi);
     table_->clearSelection();
     refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::newLocalGame()
 {
+    aiTurnPending_ = false;
     engine_.startNewGame(guandan::GameMode::LocalFour);
     table_->clearSelection();
     refreshUi();
@@ -92,22 +98,30 @@ void MainWindow::newLocalGame()
 
 void MainWindow::playCards()
 {
+    const int actingPlayer = engine_.currentPlayer();
     std::string error;
-    if (!engine_.playSelectedCards(engine_.currentPlayer(), table_->selectedCardIds(), &error)) {
+    if (!engine_.playSelectedCards(actingPlayer, table_->selectedCardIds(), &error)) {
         showMessage(QString::fromStdString(error));
+    } else {
+        table_->beginActionAnimation(actingPlayer);
     }
     table_->clearSelection();
     refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::passTurn()
 {
+    const int actingPlayer = engine_.currentPlayer();
     std::string error;
-    if (!engine_.pass(engine_.currentPlayer(), &error)) {
+    if (!engine_.pass(actingPlayer, &error)) {
         showMessage(QString::fromStdString(error));
+    } else {
+        table_->beginActionAnimation(actingPlayer);
     }
     table_->clearSelection();
     refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::hint()
@@ -137,21 +151,59 @@ void MainWindow::nextDeal()
     engine_.startNextDeal();
     table_->clearSelection();
     refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::refreshUi()
 {
     const bool humanTurn = engine_.isCurrentPlayerHuman();
     const bool roundOver = engine_.phase() == guandan::GamePhase::RoundOver;
-    playButton_->setEnabled(humanTurn && !roundOver && !table_->selectedCardIds().empty());
-    passButton_->setEnabled(humanTurn && !roundOver && engine_.canCurrentPlayerPass());
-    hintButton_->setEnabled(humanTurn && !roundOver);
-    sortButton_->setEnabled(humanTurn && !roundOver);
+    const bool acceptingInput = humanTurn && !roundOver && !aiTurnPending_;
+    playButton_->setEnabled(acceptingInput && !table_->selectedCardIds().empty());
+    passButton_->setEnabled(acceptingInput && engine_.canCurrentPlayerPass());
+    hintButton_->setEnabled(acceptingInput);
+    sortButton_->setEnabled(acceptingInput);
     nextDealButton_->setEnabled(true);
 
     statusLabel_->setText(QString::fromStdString(engine_.tableStatus()));
     syncLog();
     table_->update();
+}
+
+void MainWindow::runAiTurn()
+{
+    aiTurnPending_ = false;
+    if (engine_.mode() != guandan::GameMode::HumanVsAi ||
+        engine_.phase() != guandan::GamePhase::Playing ||
+        engine_.isCurrentPlayerHuman()) {
+        refreshUi();
+        return;
+    }
+
+    const int actingPlayer = engine_.currentPlayer();
+    const guandan::AiDecision decision = guandan::AiPlayer::choose(engine_, actingPlayer);
+    std::string error;
+    bool ok = false;
+    if (decision.pass) {
+        ok = engine_.pass(actingPlayer, &error);
+    } else {
+        ok = engine_.playSelectedCards(actingPlayer, decision.cardIds, &error);
+        if (!ok && engine_.canCurrentPlayerPass()) {
+            ok = engine_.pass(actingPlayer, &error);
+        }
+    }
+
+    if (!ok) {
+        // A failed AI move should be visible but non-blocking during a casual game.
+        table_->clearSelection();
+        refreshUi();
+        return;
+    }
+
+    table_->beginActionAnimation(actingPlayer);
+    table_->clearSelection();
+    refreshUi();
+    scheduleAiTurn();
 }
 
 void MainWindow::showMessage(const QString& message)
@@ -169,3 +221,16 @@ void MainWindow::syncLog()
     logBox_->moveCursor(QTextCursor::End);
 }
 
+void MainWindow::scheduleAiTurn()
+{
+    if (aiTurnPending_ ||
+        engine_.mode() != guandan::GameMode::HumanVsAi ||
+        engine_.phase() != guandan::GamePhase::Playing ||
+        engine_.isCurrentPlayerHuman()) {
+        return;
+    }
+
+    aiTurnPending_ = true;
+    refreshUi();
+    QTimer::singleShot(760, this, &MainWindow::runAiTurn);
+}

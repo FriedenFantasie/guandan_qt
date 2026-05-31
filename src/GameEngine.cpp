@@ -85,7 +85,9 @@ void GameEngine::startNextDeal()
     phase_ = GamePhase::Playing;
     lastPlay_ = {};
     lastShownCards_ = {};
+    lastActions_ = {};
     passCount_ = 0;
+    actionSequence_ = 0;
     finishOrder_.clear();
 
     dealCards();
@@ -96,7 +98,6 @@ void GameEngine::startNextDeal()
     out << "第 " << dealNumber_ << " 副开始，打 " << levelText(currentLevel_)
         << "，先手：" << players_[currentPlayer_].name;
     appendLog(out.str());
-    advanceAiPlayers();
 }
 
 void GameEngine::dealCards()
@@ -179,6 +180,7 @@ bool GameEngine::playSelectedCards(int playerId, const std::vector<int>& cardIds
 
     lastPlay_ = { playerId, selected, analysis };
     lastShownCards_[playerId] = selected;
+    lastActions_[playerId] = { ++actionSequence_, false, analysis.typeName() };
     passCount_ = 0;
 
     std::ostringstream out;
@@ -186,9 +188,6 @@ bool GameEngine::playSelectedCards(int playerId, const std::vector<int>& cardIds
     appendLog(out.str());
 
     afterSuccessfulPlay(playerId);
-    if (mode_ == GameMode::HumanVsAi && players_[playerId].human) {
-        advanceAiPlayers();
-    }
     return true;
 }
 
@@ -213,11 +212,10 @@ bool GameEngine::pass(int playerId, std::string* error)
         return false;
     }
 
+    lastShownCards_[playerId].clear();
+    lastActions_[playerId] = { ++actionSequence_, true, "过牌" };
     appendLog(players_[playerId].name + " 过牌。");
     afterPass(playerId);
-    if (mode_ == GameMode::HumanVsAi && players_[playerId].human) {
-        advanceAiPlayers();
-    }
     return true;
 }
 
