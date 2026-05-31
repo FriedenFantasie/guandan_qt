@@ -23,6 +23,7 @@ public:
 
     void setEngine(guandan::GameEngine* engine);
     void beginActionAnimation(int playerId);
+    void setArrangeModeActive(bool active);
     std::vector<int> selectedCardIds() const;
     void setSelectedCardIds(const std::vector<int>& ids);
     void clearSelection();
@@ -65,4 +66,5 @@ private:
     QTimer* animationTimer_ = nullptr;
     int animatingPlayer_ = -1;
     qreal animationProgress_ = 1.0;
+    bool arrangeModeActive_ = false;
 };

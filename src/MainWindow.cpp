@@ -213,12 +213,13 @@ void MainWindow::makeUi()
     connect(passButton_, &QPushButton::clicked, this, &MainWindow::passTurn);
     connect(hintButton_, &QPushButton::clicked, this, &MainWindow::hint);
     connect(table_, &TableWidget::selectionChanged, this, &MainWindow::refreshUi);
-    connect(table_, &TableWidget::arrangeRequested, this, &MainWindow::sortHand);
+    connect(table_, &TableWidget::arrangeRequested, this, &MainWindow::toggleArrangeHand);
 }
 
 void MainWindow::newHumanVsAiGame()
 {
     aiTurnPending_ = false;
+    resetArrangeModes();
     engine_.startNewGame(guandan::GameMode::HumanVsAi);
     table_->clearSelection();
     refreshUi();
@@ -228,6 +229,7 @@ void MainWindow::newHumanVsAiGame()
 void MainWindow::newLocalGame()
 {
     aiTurnPending_ = false;
+    resetArrangeModes();
     engine_.startNewGame(guandan::GameMode::LocalFour);
     table_->clearSelection();
     refreshUi();
@@ -267,9 +269,15 @@ void MainWindow::hint()
     refreshUi();
 }
 
-void MainWindow::sortHand()
+void MainWindow::toggleArrangeHand()
 {
-    engine_.arrangeCurrentPlayerHand();
+    const int playerId = engine_.currentPlayer();
+    arrangeModes_[static_cast<std::size_t>(playerId)] = !arrangeModes_[static_cast<std::size_t>(playerId)];
+    if (arrangeModes_[static_cast<std::size_t>(playerId)]) {
+        engine_.arrangeCurrentPlayerHand();
+    } else {
+        engine_.sortCurrentPlayerHand();
+    }
     table_->clearSelection();
     refreshUi();
 }
@@ -285,6 +293,7 @@ void MainWindow::nextDeal()
             return;
         }
     }
+    resetArrangeModes();
     engine_.startNextDeal();
     table_->clearSelection();
     refreshUi();
@@ -302,6 +311,7 @@ void MainWindow::refreshUi()
     nextDealButton_->setEnabled(true);
 
     statusLabel_->setText(QString::fromStdString(engine_.tableStatus()));
+    table_->setArrangeModeActive(arrangeModes_[static_cast<std::size_t>(visibleBottomPlayer())]);
     syncLog();
     table_->update();
 }
@@ -345,6 +355,22 @@ void MainWindow::runAiTurn()
 void MainWindow::showMessage(const QString& message)
 {
     QMessageBox::information(this, QStringLiteral("提示"), message);
+}
+
+int MainWindow::visibleBottomPlayer() const
+{
+    if (engine_.mode() == guandan::GameMode::LocalFour) {
+        return engine_.currentPlayer();
+    }
+    return 0;
+}
+
+void MainWindow::resetArrangeModes()
+{
+    arrangeModes_.fill(false);
+    if (table_) {
+        table_->setArrangeModeActive(false);
+    }
 }
 
 void MainWindow::syncLog()

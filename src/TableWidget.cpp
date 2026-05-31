@@ -332,6 +332,15 @@ void TableWidget::beginActionAnimation(int playerId)
     update();
 }
 
+void TableWidget::setArrangeModeActive(bool active)
+{
+    if (arrangeModeActive_ == active) {
+        return;
+    }
+    arrangeModeActive_ = active;
+    update();
+}
+
 std::vector<int> TableWidget::selectedCardIds() const
 {
     return { selectedIds_.begin(), selectedIds_.end() };
@@ -847,7 +856,8 @@ void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
 
     painter.setPen(enabled ? QColor(255, 224, 186) : QColor(126, 137, 146));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
-    painter.drawText(arrangeButtonRect_, Qt::AlignCenter, QStringLiteral("一键理牌"));
+    painter.drawText(arrangeButtonRect_, Qt::AlignCenter,
+                     arrangeModeActive_ ? QStringLiteral("取消理牌") : QStringLiteral("一键理牌"));
     painter.restore();
 }
 

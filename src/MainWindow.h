@@ -3,6 +3,7 @@
 #include "GameEngine.h"
 #include "TableWidget.h"
 
+#include <array>
 #include <QMainWindow>
 
 class QLabel;
@@ -21,13 +22,15 @@ private slots:
     void playCards();
     void passTurn();
     void hint();
-    void sortHand();
+    void toggleArrangeHand();
     void nextDeal();
     void refreshUi();
     void runAiTurn();
 
 private:
     void makeUi();
+    int visibleBottomPlayer() const;
+    void resetArrangeModes();
     void showMessage(const QString& message);
     void syncLog();
     void scheduleAiTurn();
@@ -40,5 +43,6 @@ private:
     QPushButton* passButton_ = nullptr;
     QPushButton* hintButton_ = nullptr;
     QPushButton* nextDealButton_ = nullptr;
+    std::array<bool, 4> arrangeModes_ = { false, false, false, false };
     bool aiTurnPending_ = false;
 };
