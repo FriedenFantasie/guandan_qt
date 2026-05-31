@@ -50,10 +50,10 @@ public:
         const std::vector<Card>& hand,
         Rank level,
         const std::optional<HandAnalysis>& previous = std::nullopt);
+    static std::vector<Card> arrangeHand(const std::vector<Card>& hand, Rank level);
 
 private:
     static HandAnalysis analyzeWithoutWildcards(const std::vector<Card>& cards, Rank level);
 };
 
 } // namespace guandan
-

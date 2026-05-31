@@ -252,6 +252,11 @@ void GameEngine::sortCurrentPlayerHand()
     sortHand(players_[currentPlayer_].hand, currentLevel_);
 }
 
+void GameEngine::arrangeCurrentPlayerHand()
+{
+    players_[currentPlayer_].hand = HandAnalyzer::arrangeHand(players_[currentPlayer_].hand, currentLevel_);
+}
+
 void GameEngine::advanceAiPlayers()
 {
     int safety = 0;

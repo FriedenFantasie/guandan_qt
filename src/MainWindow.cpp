@@ -50,7 +50,7 @@ void MainWindow::makeUi()
     playButton_ = new QPushButton(QStringLiteral("出牌"), root);
     passButton_ = new QPushButton(QStringLiteral("过牌"), root);
     hintButton_ = new QPushButton(QStringLiteral("提示"), root);
-    sortButton_ = new QPushButton(QStringLiteral("整理"), root);
+    sortButton_ = new QPushButton(QStringLiteral("一键理牌"), root);
     logBox_ = new QTextEdit(root);
     logBox_->setReadOnly(true);
     logBox_->setMinimumWidth(260);
@@ -132,7 +132,7 @@ void MainWindow::hint()
 
 void MainWindow::sortHand()
 {
-    engine_.sortCurrentPlayerHand();
+    engine_.arrangeCurrentPlayerHand();
     table_->clearSelection();
     refreshUi();
 }

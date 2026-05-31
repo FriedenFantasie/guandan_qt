@@ -113,6 +113,52 @@ void testComparison()
     assert(HandAnalyzer::canBeat(jokerBomb, straightFlush));
 }
 
+void testSmartArrangeGroupsCombinations()
+{
+    const Rank level = Rank::Two;
+    std::vector<Card> hand = {
+        c(20, Suit::Diamonds, Rank::Ace),
+        c(8, Suit::Clubs, Rank::Three),
+        c(3, Suit::Spades, Rank::Eight),
+        c(13, Suit::Spades, Rank::Jack),
+        c(1, Suit::Spades, Rank::Six),
+        c(15, Suit::Clubs, Rank::Jack),
+        c(10, Suit::Diamonds, Rank::Four),
+        c(18, Suit::Spades, Rank::King),
+        c(5, Suit::Spades, Rank::Ten),
+        c(7, Suit::Hearts, Rank::Three),
+        c(14, Suit::Hearts, Rank::Jack),
+        c(9, Suit::Clubs, Rank::Four),
+        c(2, Suit::Spades, Rank::Seven),
+        c(17, Suit::Diamonds, Rank::King),
+        c(4, Suit::Spades, Rank::Nine),
+        c(19, Suit::Joker, Rank::SmallJoker),
+        c(11, Suit::Hearts, Rank::Four),
+        c(6, Suit::Diamonds, Rank::Three)
+    };
+
+    const std::vector<Card> arranged = HandAnalyzer::arrangeHand(hand, level);
+    assert(arranged.size() == hand.size());
+
+    std::set<int> originalIds;
+    std::set<int> arrangedIds;
+    for (const Card& card : hand) {
+        originalIds.insert(card.id);
+    }
+    for (const Card& card : arranged) {
+        arrangedIds.insert(card.id);
+    }
+    assert(originalIds == arrangedIds);
+
+    std::vector<Card> firstGroup(arranged.begin(), arranged.begin() + 5);
+    std::vector<Card> secondGroup(arranged.begin() + 5, arranged.begin() + 11);
+    std::vector<Card> thirdGroup(arranged.begin() + 11, arranged.begin() + 16);
+
+    assert(HandAnalyzer::analyze(firstGroup, level).type == HandType::StraightFlush);
+    assert(HandAnalyzer::analyze(secondGroup, level).type == HandType::ConsecutiveTriples);
+    assert(HandAnalyzer::analyze(thirdGroup, level).type == HandType::TripleWithPair);
+}
+
 void testEngineDealAndAiLegality()
 {
     GameEngine engine;
@@ -163,6 +209,7 @@ int main()
     testBasicHands();
     testWildcards();
     testComparison();
+    testSmartArrangeGroupsCombinations();
     testEngineDealAndAiLegality();
     testFullDealCanFinish();
     std::cout << "All Guandan rule tests passed.\n";
