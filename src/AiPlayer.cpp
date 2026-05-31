@@ -25,11 +25,89 @@ bool opponentNearlyOut(const GameEngine& engine, int playerId)
         if (player.id == playerId || sameTeam(player.id, playerId) || player.finished) {
             continue;
         }
-        if (player.hand.size() <= 3) {
+        if (player.hand.size() <= 4) {
             return true;
         }
     }
     return false;
+}
+
+int leadPriority(HandType type)
+{
+    switch (type) {
+    case HandType::ConsecutiveTriples: return 900;
+    case HandType::TripleWithPair: return 860;
+    case HandType::ConsecutivePairs: return 790;
+    case HandType::Straight: return 740;
+    case HandType::Triple: return 620;
+    case HandType::Pair: return 480;
+    case HandType::Single: return 100;
+    case HandType::StraightFlush: return 60;
+    case HandType::Bomb: return 50;
+    case HandType::JokerBomb: return 40;
+    case HandType::Invalid: return 0;
+    }
+    return 0;
+}
+
+bool betterLead(const CandidatePlay& left, const CandidatePlay& right)
+{
+    const int lp = leadPriority(left.analysis.type);
+    const int rp = leadPriority(right.analysis.type);
+    if (lp != rp) {
+        return lp > rp;
+    }
+    if (left.analysis.cardCount != right.analysis.cardCount) {
+        return left.analysis.cardCount > right.analysis.cardCount;
+    }
+    if (left.analysis.sequenceLength != right.analysis.sequenceLength) {
+        return left.analysis.sequenceLength > right.analysis.sequenceLength;
+    }
+    if (left.analysis.mainValue != right.analysis.mainValue) {
+        return left.analysis.mainValue < right.analysis.mainValue;
+    }
+    return HandAnalyzer::bombPower(left.analysis) < HandAnalyzer::bombPower(right.analysis);
+}
+
+std::optional<CandidatePlay> chooseLeadFromArrangedHand(const Player& player, Rank level, bool urgent)
+{
+    const ArrangedHand arranged = HandAnalyzer::arrangeHandWithGroups(player.hand, level);
+    const bool allowBombLike = urgent || player.hand.size() <= 6;
+    std::optional<CandidatePlay> best;
+    std::optional<CandidatePlay> bestSingle;
+
+    for (const ArrangedGroup& group : arranged.groups) {
+        if (group.cardCount <= 0 ||
+            group.startIndex < 0 ||
+            group.startIndex + group.cardCount > static_cast<int>(arranged.cards.size())) {
+            continue;
+        }
+
+        CandidatePlay play;
+        play.cards.assign(arranged.cards.begin() + group.startIndex,
+                          arranged.cards.begin() + group.startIndex + group.cardCount);
+        play.analysis = group.analysis;
+        if (!play.analysis.valid()) {
+            continue;
+        }
+        if (play.analysis.isBombLike() && !allowBombLike) {
+            continue;
+        }
+        if (play.analysis.type == HandType::Single) {
+            if (!bestSingle || betterLead(play, *bestSingle)) {
+                bestSingle = play;
+            }
+            continue;
+        }
+        if (!best || betterLead(play, *best)) {
+            best = play;
+        }
+    }
+
+    if (best) {
+        return best;
+    }
+    return bestSingle;
 }
 
 } // namespace
@@ -57,6 +135,12 @@ AiDecision AiPlayer::choose(const GameEngine& engine, int playerId)
         }
     }
 
+    if (newTrick) {
+        if (const std::optional<CandidatePlay> lead = chooseLeadFromArrangedHand(player, engine.currentLevel(), urgent)) {
+            return { false, idsFromCards(lead->cards) };
+        }
+    }
+
     if (teammateControls && !urgent) {
         return { true, {} };
     }
@@ -75,4 +159,3 @@ AiDecision AiPlayer::choose(const GameEngine& engine, int playerId)
 }
 
 } // namespace guandan
-
