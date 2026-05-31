@@ -334,6 +334,11 @@ int arrangePriority(HandType type)
     return 0;
 }
 
+bool isHigherThanBomb(HandType type)
+{
+    return arrangePriority(type) > arrangePriority(HandType::Bomb);
+}
+
 bool playLessForArrange(const CandidatePlay& left, const CandidatePlay& right)
 {
     const int lp = arrangePriority(left.analysis.type);
@@ -765,11 +770,7 @@ ArrangedHand HandAnalyzer::arrangeHandWithGroups(const std::vector<Card>& hand, 
     arranged.cards.reserve(hand.size());
     std::unordered_set<int> usedIds;
 
-    for (const CandidatePlay& play : plays) {
-        if (!play.analysis.valid() || usesAnyCard(play.cards, usedIds)) {
-            continue;
-        }
-
+    auto appendPlay = [&](const CandidatePlay& play) {
         std::vector<Card> cards = displayOrderedCards(play, level);
         const int startIndex = static_cast<int>(arranged.cards.size());
         for (const Card& card : cards) {
@@ -777,6 +778,47 @@ ArrangedHand HandAnalyzer::arrangeHandWithGroups(const std::vector<Card>& hand, 
             usedIds.insert(card.id);
         }
         arranged.groups.push_back({ startIndex, static_cast<int>(cards.size()), play.analysis });
+    };
+
+    for (const CandidatePlay& play : plays) {
+        if (!play.analysis.valid() || !isHigherThanBomb(play.analysis.type)) {
+            continue;
+        }
+        if (usesAnyCard(play.cards, usedIds)) {
+            continue;
+        }
+        appendPlay(play);
+    }
+
+    std::vector<Card> remainingForBombs;
+    remainingForBombs.reserve(hand.size());
+    for (const Card& card : hand) {
+        if (usedIds.find(card.id) == usedIds.end()) {
+            remainingForBombs.push_back(card);
+        }
+    }
+
+    std::vector<CandidatePlay> bombPlays = generateCandidatePlays(remainingForBombs, level);
+    bombPlays.erase(std::remove_if(bombPlays.begin(), bombPlays.end(), [](const CandidatePlay& play) {
+        return !play.analysis.valid() || play.analysis.type != HandType::Bomb;
+    }), bombPlays.end());
+    std::sort(bombPlays.begin(), bombPlays.end(), playLessForArrange);
+
+    for (const CandidatePlay& play : bombPlays) {
+        if (usesAnyCard(play.cards, usedIds)) {
+            continue;
+        }
+        appendPlay(play);
+    }
+
+    for (const CandidatePlay& play : plays) {
+        if (!play.analysis.valid() || isHigherThanBomb(play.analysis.type) || play.analysis.type == HandType::Bomb) {
+            continue;
+        }
+        if (usesAnyCard(play.cards, usedIds)) {
+            continue;
+        }
+        appendPlay(play);
     }
 
     std::vector<Card> leftovers;
