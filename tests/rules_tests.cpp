@@ -1,7 +1,9 @@
+#include "AiPlayer.h"
 #include "Card.h"
 #include "GameEngine.h"
 #include "HandAnalyzer.h"
 
+#include <array>
 #include <cassert>
 #include <iostream>
 #include <set>
@@ -210,6 +212,40 @@ void testPlayPreservesCurrentHandOrder()
     }
 }
 
+void testAiLeadsUsefulCombinations()
+{
+    GameEngine engine;
+    engine.startNewGame(GameMode::LocalFour);
+
+    const int playerId = engine.currentPlayer();
+    std::array<Player, 4>& players = const_cast<std::array<Player, 4>&>(engine.players());
+    players[static_cast<std::size_t>(playerId)].hand = {
+        c(300, Suit::Spades, Rank::Seven),
+        c(301, Suit::Hearts, Rank::Seven),
+        c(302, Suit::Clubs, Rank::Seven),
+        c(303, Suit::Spades, Rank::Four),
+        c(304, Suit::Hearts, Rank::Four),
+        c(305, Suit::Diamonds, Rank::Ace),
+        c(306, Suit::Clubs, Rank::King),
+        c(307, Suit::Diamonds, Rank::Nine)
+    };
+
+    const AiDecision decision = AiPlayer::choose(engine, playerId);
+    assert(!decision.pass);
+
+    std::vector<Card> chosen;
+    for (int id : decision.cardIds) {
+        for (const Card& card : players[static_cast<std::size_t>(playerId)].hand) {
+            if (card.id == id) {
+                chosen.push_back(card);
+            }
+        }
+    }
+
+    const HandAnalysis analysis = HandAnalyzer::analyze(chosen, engine.currentLevel());
+    assert(analysis.type == HandType::TripleWithPair);
+}
+
 void testFullDealCanFinish()
 {
     GameEngine engine;
@@ -243,6 +279,7 @@ int main()
     testSmartArrangeGroupsCombinations();
     testEngineDealAndAiLegality();
     testPlayPreservesCurrentHandOrder();
+    testAiLeadsUsefulCombinations();
     testFullDealCanFinish();
     std::cout << "All Guandan rule tests passed.\n";
     return 0;
