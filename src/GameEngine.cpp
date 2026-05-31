@@ -308,6 +308,22 @@ std::string GameEngine::tableStatus() const
     return out.str();
 }
 
+int GameEngine::lastRoundWinningTeam() const
+{
+    if (finishOrder_.empty()) {
+        return -1;
+    }
+    return finishOrder_.front() % 2;
+}
+
+int GameEngine::lastRoundUpgradeAmount() const
+{
+    if (phase_ != GamePhase::RoundOver || finishOrder_.size() != 4) {
+        return 0;
+    }
+    return advanceAmountForOrder(finishOrder_);
+}
+
 void GameEngine::applyTribute()
 {
     if (previousFinishOrder_.size() != 4) {

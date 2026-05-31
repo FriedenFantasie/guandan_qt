@@ -70,6 +70,8 @@ public:
     const std::vector<int>& finishOrder() const { return finishOrder_; }
     const std::vector<std::string>& log() const { return log_; }
     int dealNumber() const { return dealNumber_; }
+    int lastRoundWinningTeam() const;
+    int lastRoundUpgradeAmount() const;
 
     bool isCurrentPlayerHuman() const;
     bool canCurrentPlayerPass() const;

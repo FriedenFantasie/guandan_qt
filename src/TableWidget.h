@@ -38,6 +38,7 @@ private:
     void drawLastCards(QPainter& painter, int playerId, const QRect& area);
     void drawActionText(QPainter& painter, int playerId, const QRect& area);
     void drawBombEffect(QPainter& painter, const QRect& area, qreal progress, const QPoint& offset);
+    void drawSettlementOverlay(QPainter& painter);
     void drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected);
     QString playerLabel(int playerId) const;
     int visualPlayerForSeat(int seat) const;
