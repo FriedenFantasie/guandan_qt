@@ -316,6 +316,72 @@ bool playLessForAi(const CandidatePlay& left, const CandidatePlay& right)
     return HandAnalyzer::bombPower(left.analysis) < HandAnalyzer::bombPower(right.analysis);
 }
 
+int arrangePriority(HandType type)
+{
+    switch (type) {
+    case HandType::JokerBomb: return 1000;
+    case HandType::StraightFlush: return 950;
+    case HandType::Bomb: return 900;
+    case HandType::ConsecutiveTriples: return 820;
+    case HandType::TripleWithPair: return 780;
+    case HandType::ConsecutivePairs: return 720;
+    case HandType::Straight: return 680;
+    case HandType::Triple: return 520;
+    case HandType::Pair: return 420;
+    case HandType::Single: return 100;
+    case HandType::Invalid: return 0;
+    }
+    return 0;
+}
+
+bool playLessForArrange(const CandidatePlay& left, const CandidatePlay& right)
+{
+    const int lp = arrangePriority(left.analysis.type);
+    const int rp = arrangePriority(right.analysis.type);
+    if (lp != rp) {
+        return lp > rp;
+    }
+    if (left.analysis.sequenceLength != right.analysis.sequenceLength) {
+        return left.analysis.sequenceLength > right.analysis.sequenceLength;
+    }
+    if (left.analysis.cardCount != right.analysis.cardCount) {
+        return left.analysis.cardCount > right.analysis.cardCount;
+    }
+    if (left.analysis.mainValue != right.analysis.mainValue) {
+        return left.analysis.mainValue < right.analysis.mainValue;
+    }
+    if (left.analysis.isBombLike() && right.analysis.isBombLike()) {
+        return HandAnalyzer::bombPower(left.analysis) > HandAnalyzer::bombPower(right.analysis);
+    }
+    return cardsKey(left.cards) < cardsKey(right.cards);
+}
+
+bool usesAnyCard(const std::vector<Card>& cards, const std::unordered_set<int>& usedIds)
+{
+    for (const Card& card : cards) {
+        if (usedIds.find(card.id) != usedIds.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<Card> displayOrderedCards(const CandidatePlay& play, Rank level)
+{
+    std::vector<Card> cards = play.cards;
+    switch (play.analysis.type) {
+    case HandType::Straight:
+    case HandType::StraightFlush:
+    case HandType::ConsecutivePairs:
+    case HandType::ConsecutiveTriples:
+    case HandType::TripleWithPair:
+        return cards;
+    default:
+        sortHand(cards, level);
+        return cards;
+    }
+}
+
 } // namespace
 
 bool HandAnalysis::isBombLike() const
@@ -683,6 +749,38 @@ std::vector<CandidatePlay> HandAnalyzer::generateCandidatePlays(
 
     std::sort(plays.begin(), plays.end(), playLessForAi);
     return plays;
+}
+
+std::vector<Card> HandAnalyzer::arrangeHand(const std::vector<Card>& hand, Rank level)
+{
+    std::vector<CandidatePlay> plays = generateCandidatePlays(hand, level);
+    std::sort(plays.begin(), plays.end(), playLessForArrange);
+
+    std::vector<Card> arranged;
+    arranged.reserve(hand.size());
+    std::unordered_set<int> usedIds;
+
+    for (const CandidatePlay& play : plays) {
+        if (!play.analysis.valid() || usesAnyCard(play.cards, usedIds)) {
+            continue;
+        }
+
+        std::vector<Card> cards = displayOrderedCards(play, level);
+        for (const Card& card : cards) {
+            arranged.push_back(card);
+            usedIds.insert(card.id);
+        }
+    }
+
+    std::vector<Card> leftovers;
+    for (const Card& card : hand) {
+        if (usedIds.find(card.id) == usedIds.end()) {
+            leftovers.push_back(card);
+        }
+    }
+    sortHand(leftovers, level);
+    arranged.insert(arranged.end(), leftovers.begin(), leftovers.end());
+    return arranged;
 }
 
 } // namespace guandan

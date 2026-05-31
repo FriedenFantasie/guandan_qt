@@ -54,6 +54,7 @@ public:
     bool pass(int playerId, std::string* error = nullptr);
     std::vector<int> hintForCurrentPlayer() const;
     void sortCurrentPlayerHand();
+    void arrangeCurrentPlayerHand();
     void advanceAiPlayers();
 
     const std::array<Player, 4>& players() const { return players_; }
