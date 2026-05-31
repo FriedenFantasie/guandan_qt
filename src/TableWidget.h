@@ -9,6 +9,12 @@
 #include <utility>
 #include <vector>
 
+enum class CardBackStyle {
+    Neutral,
+    Ally,
+    Opponent
+};
+
 class TableWidget : public QWidget {
     Q_OBJECT
 
@@ -42,10 +48,12 @@ private:
     void drawBombEffect(QPainter& painter, const QRect& area, qreal progress, const QPoint& offset);
     void drawSettlementOverlay(QPainter& painter);
     void drawArrangeButton(QPainter& painter, const QRect& playerArea);
-    void drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected);
+    void drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected,
+                  CardBackStyle backStyle = CardBackStyle::Neutral);
     bool canUseArrangeButton() const;
     QString playerLabel(int playerId) const;
     int visualPlayerForSeat(int seat) const;
+    CardBackStyle backStyleForPlayer(int playerId) const;
     QPoint animationOffsetForPlayer(int playerId) const;
 
     guandan::GameEngine* engine_ = nullptr;

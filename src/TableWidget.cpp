@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QSvgRenderer>
 #include <QTimer>
 
 #include <algorithm>
@@ -108,16 +109,88 @@ QColor groupHintColor(int index)
     return colors[static_cast<std::size_t>(index) % colors.size()];
 }
 
+void drawSvgMark(QPainter& painter, const QRectF& bounds, CardBackStyle style)
+{
+    const QString path = style == CardBackStyle::Ally
+        ? QStringLiteral(":/cards/icons/rebel.svg")
+        : QStringLiteral(":/cards/icons/empire.svg");
+    QSvgRenderer renderer(path);
+    if (renderer.isValid()) {
+        renderer.render(&painter, bounds);
+    }
+}
+
+void drawCardBack(QPainter& painter, const QRect& rect, CardBackStyle style)
+{
+    QColor top;
+    QColor bottom;
+    QColor line;
+    QColor border;
+    switch (style) {
+    case CardBackStyle::Ally:
+        top = QColor(247, 136, 38);
+        bottom = QColor(205, 75, 20);
+        line = QColor(255, 203, 120, 120);
+        border = QColor(116, 48, 15);
+        break;
+    case CardBackStyle::Opponent:
+        top = QColor(28, 29, 32);
+        bottom = QColor(4, 5, 8);
+        line = QColor(255, 255, 255, 58);
+        border = QColor(190, 196, 204);
+        break;
+    case CardBackStyle::Neutral:
+        top = QColor(54, 105, 183);
+        bottom = QColor(30, 71, 145);
+        line = QColor(230, 238, 255, 115);
+        border = QColor(20, 37, 78);
+        break;
+    }
+
+    QPainterPath path;
+    path.addRoundedRect(rect, 8, 8);
+    QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
+    gradient.setColorAt(0.0, top);
+    gradient.setColorAt(1.0, bottom);
+    painter.fillPath(path, gradient);
+    painter.setPen(QPen(border, 1));
+    painter.drawPath(path);
+
+    painter.save();
+    painter.setClipPath(path);
+    painter.setPen(QPen(line, style == CardBackStyle::Opponent ? 1 : 2));
+    for (int y = 12; y < kCardHeight + 22; y += 14) {
+        painter.drawLine(8, y, kCardWidth - 8, y + 18);
+    }
+    painter.setPen(QPen(QColor(255, 255, 255, style == CardBackStyle::Opponent ? 42 : 54), 1));
+    painter.drawRoundedRect(rect.adjusted(7, 7, -7, -7), 6, 6);
+    painter.restore();
+
+    const QRectF markRect(rect.left() + 15, rect.top() + 22, rect.width() - 30, rect.height() - 44);
+    if (style == CardBackStyle::Ally) {
+        drawSvgMark(painter, markRect, style);
+    } else if (style == CardBackStyle::Opponent) {
+        drawSvgMark(painter, markRect, style);
+    } else {
+        painter.setPen(QPen(QColor(230, 238, 255), 2));
+        painter.setFont(QFont(QStringLiteral("Segoe UI"), 18, QFont::Bold));
+        painter.drawText(rect, Qt::AlignCenter, QStringLiteral("GD"));
+    }
+}
+
 class CardPixmapCache {
 public:
-    QPixmap pixmap(const guandan::Card& card, bool faceUp, int levelValue, bool wild)
+    QPixmap pixmap(const guandan::Card& card, bool faceUp, int levelValue, bool wild, CardBackStyle backStyle)
     {
-        const QString key = QStringLiteral("%1-%2-%3-%4-%5")
-                                .arg(card.id)
-                                .arg(static_cast<int>(card.suit))
-                                .arg(static_cast<int>(card.rank))
-                                .arg(faceUp)
-                                .arg(levelValue + (wild ? 100 : 0));
+        const QString key = faceUp
+            ? QStringLiteral("%1-%2-%3-%4-%5-%6")
+                  .arg(card.id)
+                  .arg(static_cast<int>(card.suit))
+                  .arg(static_cast<int>(card.rank))
+                  .arg(faceUp)
+                  .arg(levelValue + (wild ? 100 : 0))
+                  .arg(static_cast<int>(backStyle))
+            : QStringLiteral("back-%1").arg(static_cast<int>(backStyle));
         auto it = cache_.find(key);
         if (it != cache_.end()) {
             return it->second;
@@ -132,18 +205,14 @@ public:
         QRect rect(1, 1, kCardWidth - 2, kCardHeight - 2);
         QPainterPath path;
         path.addRoundedRect(rect, 8, 8);
-        painter.fillPath(path, faceUp ? QColor(252, 250, 244) : QColor(44, 91, 170));
-        painter.setPen(QPen(QColor(28, 31, 36), 1));
-        painter.drawPath(path);
 
         if (!faceUp) {
-            painter.setPen(QPen(QColor(230, 238, 255), 2));
-            for (int y = 14; y < kCardHeight; y += 14) {
-                painter.drawLine(12, y, kCardWidth - 12, y + 16);
-            }
-            painter.setFont(QFont(QStringLiteral("Segoe UI"), 18, QFont::Bold));
-            painter.drawText(rect, Qt::AlignCenter, QStringLiteral("GD"));
+            drawCardBack(painter, rect, backStyle);
         } else {
+            painter.fillPath(path, QColor(252, 250, 244));
+            painter.setPen(QPen(QColor(28, 31, 36), 1));
+            painter.drawPath(path);
+
             const QColor color = suitColor(card.suit, card.rank);
             painter.setPen(color);
             painter.setFont(QFont(QStringLiteral("Segoe UI"), 15, QFont::Bold));
@@ -331,6 +400,7 @@ QRect TableWidget::cardRectForIndex(int index, int count, const QRect& area, boo
 void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive)
 {
     const guandan::Player& player = engine_->player(playerId);
+    const CardBackStyle backStyle = backStyleForPlayer(playerId);
 
     painter.setPen(QColor(245, 248, 241));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
@@ -350,7 +420,7 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
         const bool selected = selectedIds_.count(card.id) > 0 && interactive;
         const QRect cardRect = cardRectForIndex(i, count, area, selected);
         cardRects.push_back(cardRect);
-        drawCard(painter, cardRect, card, faceUp, selected);
+        drawCard(painter, cardRect, card, faceUp, selected, backStyle);
         if (interactive && faceUp) {
             clickableCards_.push_back({ card.id, cardRect });
         }
@@ -655,10 +725,11 @@ void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
     painter.restore();
 }
 
-void TableWidget::drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected)
+void TableWidget::drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected,
+                           CardBackStyle backStyle)
 {
     const bool wild = engine_ && guandan::isWildCard(card, engine_->currentLevel());
-    QPixmap pixmap = cardCache().pixmap(card, faceUp, static_cast<int>(engine_->currentLevel()), wild);
+    QPixmap pixmap = cardCache().pixmap(card, faceUp, static_cast<int>(engine_->currentLevel()), wild, backStyle);
     painter.drawPixmap(rect, pixmap);
     if (selected) {
         painter.setPen(QPen(QColor(255, 220, 70), 3));
@@ -686,6 +757,22 @@ int TableWidget::visualPlayerForSeat(int seat) const
         return 0;
     }
     return seat;
+}
+
+CardBackStyle TableWidget::backStyleForPlayer(int playerId) const
+{
+    if (!engine_) {
+        return CardBackStyle::Neutral;
+    }
+
+    const int viewpointPlayer = visualPlayerForSeat(0);
+    if (playerId == viewpointPlayer) {
+        return CardBackStyle::Neutral;
+    }
+
+    return guandan::sameTeam(playerId, viewpointPlayer)
+        ? CardBackStyle::Ally
+        : CardBackStyle::Opponent;
 }
 
 bool TableWidget::canUseArrangeButton() const
