@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <string>
 
 namespace {
 
@@ -46,6 +47,22 @@ QString qCardSuit(guandan::Suit suit)
     case guandan::Suit::Joker: return QStringLiteral("★");
     }
     return QStringLiteral("?");
+}
+
+QString qLevel(guandan::Rank rank)
+{
+    return QString::fromStdString(guandan::levelText(rank));
+}
+
+QString placeText(int place)
+{
+    switch (place) {
+    case 1: return QStringLiteral("头游");
+    case 2: return QStringLiteral("二游");
+    case 3: return QStringLiteral("三游");
+    case 4: return QStringLiteral("末游");
+    default: return QStringLiteral("-");
+    }
 }
 
 class CardPixmapCache {
@@ -211,6 +228,10 @@ void TableWidget::paintEvent(QPaintEvent*)
     painter.setPen(QColor(245, 248, 241));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold));
     painter.drawText(QRect(34, 26, 430, 26), Qt::AlignLeft, QString::fromStdString(engine_->tableStatus()));
+
+    if (engine_->phase() == guandan::GamePhase::RoundOver) {
+        drawSettlementOverlay(painter);
+    }
 }
 
 void TableWidget::updateActionAnimation()
@@ -229,7 +250,7 @@ void TableWidget::updateActionAnimation()
 
 void TableWidget::mousePressEvent(QMouseEvent* event)
 {
-    if (!engine_) {
+    if (!engine_ || engine_->phase() != guandan::GamePhase::Playing) {
         return;
     }
     for (auto it = clickableCards_.rbegin(); it != clickableCards_.rend(); ++it) {
@@ -403,6 +424,91 @@ void TableWidget::drawBombEffect(QPainter& painter, const QRect& area, qreal pro
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 15, QFont::Bold));
     painter.setPen(QColor(82, 28, 9, static_cast<int>(235 * fade)));
     painter.drawText(QRectF(center.x() - 48, center.y() - 16, 96, 32), Qt::AlignCenter, QStringLiteral("炸弹"));
+    painter.restore();
+}
+
+void TableWidget::drawSettlementOverlay(QPainter& painter)
+{
+    const std::vector<int>& order = engine_->finishOrder();
+    if (order.size() != 4) {
+        return;
+    }
+
+    const int winningTeam = engine_->lastRoundWinningTeam();
+    const int upgradeAmount = engine_->lastRoundUpgradeAmount();
+    const guandan::Rank nextLevel = winningTeam >= 0 ? engine_->teamLevels()[winningTeam] : engine_->currentLevel();
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillRect(rect(), QColor(8, 16, 22, 142));
+
+    const int panelWidth = std::min(620, width() - 120);
+    const int panelHeight = 430;
+    const QRect panel(width() / 2 - panelWidth / 2,
+                      height() / 2 - panelHeight / 2,
+                      panelWidth,
+                      panelHeight);
+
+    QPainterPath shadow;
+    shadow.addRoundedRect(panel.adjusted(0, 8, 0, 12), 16, 16);
+    painter.fillPath(shadow, QColor(0, 0, 0, 76));
+
+    QPainterPath panelPath;
+    panelPath.addRoundedRect(panel, 16, 16);
+    QLinearGradient gradient(panel.topLeft(), panel.bottomRight());
+    gradient.setColorAt(0.0, QColor(252, 248, 232));
+    gradient.setColorAt(1.0, QColor(224, 237, 222));
+    painter.fillPath(panelPath, gradient);
+    painter.setPen(QPen(QColor(50, 78, 58), 2));
+    painter.drawPath(panelPath);
+
+    painter.setPen(QColor(28, 40, 34));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 26, QFont::Bold));
+    painter.drawText(QRect(panel.left(), panel.top() + 26, panel.width(), 46),
+                     Qt::AlignCenter,
+                     QStringLiteral("本副结算"));
+
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 15, QFont::Bold));
+    painter.setPen(QColor(58, 91, 60));
+    painter.drawText(QRect(panel.left() + 36, panel.top() + 86, panel.width() - 72, 34),
+                     Qt::AlignCenter,
+                     QStringLiteral("队伍%1获胜  升级%2级  下一副打%3")
+                         .arg(winningTeam)
+                         .arg(upgradeAmount)
+                         .arg(qLevel(nextLevel)));
+
+    const QRect ranking(panel.left() + 60, panel.top() + 145, panel.width() - 120, 190);
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 13, QFont::Bold));
+    for (int i = 0; i < static_cast<int>(order.size()); ++i) {
+        const int playerId = order[i];
+        const guandan::Player& player = engine_->player(playerId);
+        const QRect row(ranking.left(), ranking.top() + i * 44, ranking.width(), 34);
+        const QColor rowColor = i == 0 ? QColor(229, 194, 82, 210) : QColor(255, 255, 255, 150);
+
+        QPainterPath rowPath;
+        rowPath.addRoundedRect(row, 8, 8);
+        painter.fillPath(rowPath, rowColor);
+
+        painter.setPen(QColor(32, 43, 38));
+        painter.drawText(row.adjusted(16, 0, -16, 0),
+                         Qt::AlignVCenter | Qt::AlignLeft,
+                         QStringLiteral("%1  %2").arg(placeText(i + 1), QString::fromStdString(player.name)));
+        painter.drawText(row.adjusted(16, 0, -16, 0),
+                         Qt::AlignVCenter | Qt::AlignRight,
+                         QStringLiteral("队伍%1").arg(playerId % 2));
+    }
+
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold));
+    painter.setPen(QColor(65, 78, 68));
+    painter.drawText(QRect(panel.left() + 48, panel.bottom() - 62, panel.width() - 96, 28),
+                     Qt::AlignCenter,
+                     QStringLiteral("第%1副结束").arg(engine_->dealNumber()));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
+    painter.drawText(QRect(panel.left() + 48, panel.bottom() - 36, panel.width() - 96, 22),
+                     Qt::AlignCenter,
+                     QStringLiteral("队伍0：%1    队伍1：%2")
+                         .arg(qLevel(engine_->teamLevels()[0]), qLevel(engine_->teamLevels()[1])));
+
     painter.restore();
 }
 

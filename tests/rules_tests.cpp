@@ -150,6 +150,9 @@ void testFullDealCanFinish()
 
     assert(engine.phase() == GamePhase::RoundOver);
     assert(engine.finishOrder().size() == 4);
+    assert(engine.lastRoundWinningTeam() == engine.finishOrder().front() % 2);
+    assert(engine.lastRoundUpgradeAmount() >= 1);
+    assert(engine.lastRoundUpgradeAmount() <= 3);
 }
 
 } // namespace
