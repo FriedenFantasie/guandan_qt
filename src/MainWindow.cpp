@@ -4,12 +4,105 @@
 
 #include <QApplication>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
+
+namespace {
+
+QString hudStyleSheet()
+{
+    return QStringLiteral(R"(
+        QMainWindow {
+            background: #07090d;
+        }
+        QWidget#root {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                        stop:0 #06080d, stop:0.58 #111822, stop:1 #08090d);
+            color: #e9edf1;
+            font-family: "Microsoft YaHei", "Segoe UI";
+        }
+        QWidget#topPanel,
+        QWidget#sidePanel {
+            background: rgba(8, 12, 18, 224);
+            border: 1px solid rgba(242, 128, 38, 190);
+            border-radius: 8px;
+        }
+        QLabel {
+            color: #e9edf1;
+        }
+        QLabel#statusLabel {
+            color: #f6dec0;
+            background: rgba(2, 5, 9, 190);
+            border: 1px solid rgba(125, 194, 255, 120);
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-weight: 700;
+        }
+        QLabel#logTitle {
+            color: #ff9a3d;
+            font-weight: 800;
+            padding: 2px 4px 4px 4px;
+            letter-spacing: 0px;
+        }
+        QPushButton {
+            min-height: 30px;
+            padding: 6px 13px;
+            color: #f7ead7;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                        stop:0 #202834, stop:1 #0a0e14);
+            border: 1px solid rgba(255, 140, 48, 205);
+            border-radius: 4px;
+            font-weight: 800;
+        }
+        QPushButton:hover {
+            color: #ffffff;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                        stop:0 #34313a, stop:1 #15110d);
+            border-color: #ffb060;
+        }
+        QPushButton:pressed {
+            background: #2d1608;
+            border-color: #ffd18c;
+            padding-top: 7px;
+            padding-bottom: 5px;
+        }
+        QPushButton:disabled {
+            color: rgba(220, 224, 228, 82);
+            background: #11161d;
+            border-color: rgba(130, 140, 150, 70);
+        }
+        QTextEdit#logBox {
+            color: #d8e9ff;
+            background: rgba(2, 4, 8, 232);
+            border: 1px solid rgba(125, 194, 255, 120);
+            border-radius: 6px;
+            padding: 7px;
+            font-family: "Consolas", "Microsoft YaHei";
+            selection-background-color: #a95518;
+        }
+        QTextEdit#logBox QScrollBar:vertical {
+            width: 10px;
+            background: #06090e;
+            margin: 2px;
+        }
+        QTextEdit#logBox QScrollBar::handle:vertical {
+            background: #c76a24;
+            border-radius: 4px;
+            min-height: 24px;
+        }
+        QTextEdit#logBox QScrollBar::add-line:vertical,
+        QTextEdit#logBox QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+    )");
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -23,15 +116,21 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::makeUi()
 {
     QWidget* root = new QWidget(this);
+    root->setObjectName(QStringLiteral("root"));
     QVBoxLayout* rootLayout = new QVBoxLayout(root);
-    rootLayout->setContentsMargins(10, 10, 10, 10);
-    rootLayout->setSpacing(8);
+    rootLayout->setContentsMargins(12, 12, 12, 12);
+    rootLayout->setSpacing(10);
 
-    QHBoxLayout* topBar = new QHBoxLayout();
-    QPushButton* humanVsAi = new QPushButton(QStringLiteral("1人对3电脑"), root);
-    QPushButton* localFour = new QPushButton(QStringLiteral("4人本地"), root);
-    nextDealButton_ = new QPushButton(QStringLiteral("下一副"), root);
-    statusLabel_ = new QLabel(root);
+    QWidget* topPanel = new QWidget(root);
+    topPanel->setObjectName(QStringLiteral("topPanel"));
+    QHBoxLayout* topBar = new QHBoxLayout(topPanel);
+    topBar->setContentsMargins(10, 8, 10, 8);
+    topBar->setSpacing(8);
+    QPushButton* humanVsAi = new QPushButton(QStringLiteral("1人对3电脑"), topPanel);
+    QPushButton* localFour = new QPushButton(QStringLiteral("4人本地"), topPanel);
+    nextDealButton_ = new QPushButton(QStringLiteral("下一副"), topPanel);
+    statusLabel_ = new QLabel(topPanel);
+    statusLabel_->setObjectName(QStringLiteral("statusLabel"));
     statusLabel_->setMinimumWidth(420);
 
     topBar->addWidget(humanVsAi);
@@ -39,33 +138,45 @@ void MainWindow::makeUi()
     topBar->addWidget(nextDealButton_);
     topBar->addStretch();
     topBar->addWidget(statusLabel_);
-    rootLayout->addLayout(topBar);
+    rootLayout->addWidget(topPanel);
 
     QHBoxLayout* center = new QHBoxLayout();
+    center->setSpacing(10);
     table_ = new TableWidget(root);
     table_->setEngine(&engine_);
     center->addWidget(table_, 1);
 
-    QVBoxLayout* side = new QVBoxLayout();
-    playButton_ = new QPushButton(QStringLiteral("出牌"), root);
-    passButton_ = new QPushButton(QStringLiteral("过牌"), root);
-    hintButton_ = new QPushButton(QStringLiteral("提示"), root);
-    logBox_ = new QTextEdit(root);
+    QWidget* sidePanel = new QWidget(root);
+    sidePanel->setObjectName(QStringLiteral("sidePanel"));
+    sidePanel->setMinimumWidth(282);
+    sidePanel->setMaximumWidth(348);
+    QVBoxLayout* side = new QVBoxLayout(sidePanel);
+    side->setContentsMargins(10, 10, 10, 10);
+    side->setSpacing(9);
+    playButton_ = new QPushButton(QStringLiteral("出牌"), sidePanel);
+    passButton_ = new QPushButton(QStringLiteral("过牌"), sidePanel);
+    hintButton_ = new QPushButton(QStringLiteral("提示"), sidePanel);
+    logBox_ = new QTextEdit(sidePanel);
+    logBox_->setObjectName(QStringLiteral("logBox"));
     logBox_->setReadOnly(true);
     logBox_->setMinimumWidth(260);
     logBox_->setMaximumWidth(330);
+    QLabel* logTitle = new QLabel(QStringLiteral("牌局记录"), sidePanel);
+    logTitle->setObjectName(QStringLiteral("logTitle"));
 
     side->addWidget(playButton_);
     side->addWidget(passButton_);
     side->addWidget(hintButton_);
-    side->addWidget(new QLabel(QStringLiteral("牌局记录"), root));
+    side->addWidget(logTitle);
     side->addWidget(logBox_, 1);
-    center->addLayout(side);
+    center->addWidget(sidePanel);
     rootLayout->addLayout(center, 1);
 
     setCentralWidget(root);
+    setStyleSheet(hudStyleSheet());
     resize(1280, 780);
     setWindowTitle(QStringLiteral("掼蛋 - Qt 四人桌"));
+    setWindowIcon(QIcon(QStringLiteral(":/cards/icons/app_icon.ico")));
 
     connect(humanVsAi, &QPushButton::clicked, this, &MainWindow::newHumanVsAiGame);
     connect(localFour, &QPushButton::clicked, this, &MainWindow::newLocalGame);

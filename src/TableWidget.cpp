@@ -109,6 +109,65 @@ QColor groupHintColor(int index)
     return colors[static_cast<std::size_t>(index) % colors.size()];
 }
 
+QColor hudAccentForBack(CardBackStyle style)
+{
+    switch (style) {
+    case CardBackStyle::Ally:
+        return QColor(255, 142, 44);
+    case CardBackStyle::Opponent:
+        return QColor(158, 199, 232);
+    case CardBackStyle::Neutral:
+        return QColor(255, 194, 98);
+    }
+    return QColor(255, 194, 98);
+}
+
+void drawHudCorners(QPainter& painter, const QRect& area, const QColor& color, int length)
+{
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 92), 7, Qt::SolidLine, Qt::SquareCap));
+    const std::array<QLine, 8> glow = {
+        QLine(area.left() + 10, area.top() + 10, area.left() + length, area.top() + 10),
+        QLine(area.left() + 10, area.top() + 10, area.left() + 10, area.top() + length),
+        QLine(area.right() - 10, area.top() + 10, area.right() - length, area.top() + 10),
+        QLine(area.right() - 10, area.top() + 10, area.right() - 10, area.top() + length),
+        QLine(area.left() + 10, area.bottom() - 10, area.left() + length, area.bottom() - 10),
+        QLine(area.left() + 10, area.bottom() - 10, area.left() + 10, area.bottom() - length),
+        QLine(area.right() - 10, area.bottom() - 10, area.right() - length, area.bottom() - 10),
+        QLine(area.right() - 10, area.bottom() - 10, area.right() - 10, area.bottom() - length)
+    };
+    for (const QLine& line : glow) {
+        painter.drawLine(line);
+    }
+
+    painter.setPen(QPen(color, 2, Qt::SolidLine, Qt::SquareCap));
+    for (const QLine& line : glow) {
+        painter.drawLine(line);
+    }
+    painter.restore();
+}
+
+void drawHudPanel(QPainter& painter, const QRect& rect, const QColor& accent)
+{
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QPainterPath shadow;
+    shadow.addRoundedRect(rect.adjusted(0, 5, 0, 7), 7, 7);
+    painter.fillPath(shadow, QColor(0, 0, 0, 94));
+
+    QPainterPath path;
+    path.addRoundedRect(rect, 7, 7);
+    QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
+    gradient.setColorAt(0.0, QColor(14, 19, 27, 224));
+    gradient.setColorAt(1.0, QColor(3, 6, 11, 224));
+    painter.fillPath(path, gradient);
+    painter.setPen(QPen(QColor(accent.red(), accent.green(), accent.blue(), 186), 1));
+    painter.drawPath(path);
+    painter.restore();
+}
+
 void drawSvgMark(QPainter& painter, const QRectF& bounds, CardBackStyle style)
 {
     const QString path = style == CardBackStyle::Ally
@@ -304,17 +363,39 @@ void TableWidget::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(42, 112, 82));
+
+    QLinearGradient background(rect().topLeft(), rect().bottomRight());
+    background.setColorAt(0.0, QColor(3, 5, 9));
+    background.setColorAt(0.52, QColor(14, 19, 27));
+    background.setColorAt(1.0, QColor(6, 6, 8));
+    painter.fillRect(rect(), background);
+
+    painter.save();
+    painter.setPen(QPen(QColor(125, 194, 255, 22), 1));
+    for (int x = 28; x < width(); x += 54) {
+        painter.drawLine(x, 0, x, height());
+    }
+    for (int y = 24; y < height(); y += 48) {
+        painter.drawLine(0, y, width(), y);
+    }
+    painter.restore();
 
     QRect table = rect().adjusted(22, 18, -22, -18);
     QPainterPath tablePath;
     tablePath.addRoundedRect(table, 18, 18);
-    painter.fillPath(tablePath, QColor(36, 128, 86));
-    painter.setPen(QPen(QColor(224, 235, 218, 110), 2));
+    QLinearGradient tableGradient(table.topLeft(), table.bottomRight());
+    tableGradient.setColorAt(0.0, QColor(18, 24, 33, 236));
+    tableGradient.setColorAt(0.58, QColor(8, 12, 18, 240));
+    tableGradient.setColorAt(1.0, QColor(23, 16, 12, 236));
+    painter.fillPath(tablePath, tableGradient);
+    painter.setPen(QPen(QColor(255, 143, 44, 96), 8));
     painter.drawPath(tablePath);
+    painter.setPen(QPen(QColor(166, 210, 242, 132), 2));
+    painter.drawPath(tablePath);
+    drawHudCorners(painter, table.adjusted(7, 7, -7, -7), QColor(255, 143, 44), 78);
 
     if (!engine_) {
-        painter.setPen(Qt::white);
+        painter.setPen(QColor(245, 232, 212));
         painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 20, QFont::Bold));
         painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("掼蛋"));
         return;
@@ -340,9 +421,12 @@ void TableWidget::paintEvent(QPaintEvent*)
     drawLastCards(painter, visualPlayerForSeat(3), QRect(width() / 2 + 100, height() / 2 - 70, 260, 110));
     drawLastCards(painter, visualPlayerForSeat(0), QRect(width() / 2 - 230, height() / 2 + 78, 460, 110));
 
-    painter.setPen(QColor(245, 248, 241));
+    const QRect statusPanel(30, 25, std::min(520, width() - 60), 34);
+    drawHudPanel(painter, statusPanel, QColor(255, 143, 44));
+    painter.setPen(QColor(255, 224, 186));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold));
-    painter.drawText(QRect(34, 26, 430, 26), Qt::AlignLeft, QString::fromStdString(engine_->tableStatus()));
+    painter.drawText(statusPanel.adjusted(14, 0, -14, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                     QString::fromStdString(engine_->tableStatus()));
 
     if (engine_->phase() == guandan::GamePhase::RoundOver) {
         drawSettlementOverlay(painter);
@@ -401,12 +485,17 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
 {
     const guandan::Player& player = engine_->player(playerId);
     const CardBackStyle backStyle = backStyleForPlayer(playerId);
+    const QColor accent = hudAccentForBack(backStyle);
 
-    painter.setPen(QColor(245, 248, 241));
+    const QRect labelRect = area.adjusted(18, -28, -18, -area.height() - 3);
+    drawHudPanel(painter, labelRect, accent);
+    painter.setPen(QColor(244, 239, 230));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
-    painter.drawText(area.adjusted(0, -24, 0, -area.height()), Qt::AlignCenter, playerLabel(playerId));
+    painter.drawText(labelRect.adjusted(8, 0, -8, 0), Qt::AlignCenter, playerLabel(playerId));
 
     if (player.finished) {
+        drawHudPanel(painter, area.adjusted(24, 18, -24, -18), accent);
+        painter.setPen(QColor(245, 232, 212));
         painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 14, QFont::Bold));
         painter.drawText(area, Qt::AlignCenter, QStringLiteral("已出完"));
         return;
@@ -431,7 +520,7 @@ void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& a
     }
 
     if (!faceUp) {
-        painter.setPen(QColor(245, 248, 241));
+        painter.setPen(QColor(210, 224, 232));
         painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
         painter.drawText(area.adjusted(0, kCardHeight + 2, 0, 0), Qt::AlignCenter,
                          QStringLiteral("余牌 %1").arg(count));
@@ -513,7 +602,7 @@ void TableWidget::drawLastCards(QPainter& painter, int playerId, const QRect& ar
         drawBombEffect(painter, area, progress, offset);
     }
 
-    painter.setPen(QColor(236, 240, 230));
+    painter.setPen(action.bomb ? QColor(255, 177, 80) : QColor(217, 235, 247));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9));
     painter.drawText(area.adjusted(0, -20, 0, 0).translated(offset), Qt::AlignTop | Qt::AlignHCenter,
                      QString::fromStdString(action.text.empty() ? std::string("出牌") : action.text));
@@ -553,14 +642,11 @@ void TableWidget::drawActionText(QPainter& painter, int playerId, const QRect& a
     painter.save();
     painter.setOpacity(0.40 + 0.60 * progress);
 
-    QPainterPath path;
-    path.addRoundedRect(bubble, 10, 10);
-    const QColor fill = action.pass ? QColor(25, 35, 42, 205) : QColor(250, 246, 222, 220);
-    painter.fillPath(path, fill);
-    painter.setPen(QPen(action.pass ? QColor(226, 232, 220) : QColor(75, 52, 22), 1));
-    painter.drawPath(path);
+    const QColor accent = action.pass ? QColor(138, 162, 178) : QColor(255, 143, 44);
+    drawHudPanel(painter, bubble, accent);
 
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 13, QFont::Bold));
+    painter.setPen(action.pass ? QColor(221, 229, 234) : QColor(255, 224, 186));
     painter.drawText(bubble, Qt::AlignCenter, QString::fromStdString(action.text));
     painter.restore();
 }
@@ -619,7 +705,7 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
 
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(8, 16, 22, 142));
+    painter.fillRect(rect(), QColor(1, 4, 8, 176));
 
     const int panelWidth = std::min(620, width() - 120);
     const int panelHeight = 430;
@@ -629,26 +715,30 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
                       panelHeight);
 
     QPainterPath shadow;
-    shadow.addRoundedRect(panel.adjusted(0, 8, 0, 12), 16, 16);
-    painter.fillPath(shadow, QColor(0, 0, 0, 76));
+    shadow.addRoundedRect(panel.adjusted(0, 10, 0, 14), 16, 16);
+    painter.fillPath(shadow, QColor(0, 0, 0, 118));
 
     QPainterPath panelPath;
     panelPath.addRoundedRect(panel, 16, 16);
     QLinearGradient gradient(panel.topLeft(), panel.bottomRight());
-    gradient.setColorAt(0.0, QColor(252, 248, 232));
-    gradient.setColorAt(1.0, QColor(224, 237, 222));
+    gradient.setColorAt(0.0, QColor(28, 33, 43));
+    gradient.setColorAt(0.62, QColor(7, 12, 19));
+    gradient.setColorAt(1.0, QColor(28, 15, 8));
     painter.fillPath(panelPath, gradient);
-    painter.setPen(QPen(QColor(50, 78, 58), 2));
+    painter.setPen(QPen(QColor(255, 143, 44, 168), 3));
     painter.drawPath(panelPath);
+    painter.setPen(QPen(QColor(152, 210, 246, 130), 1));
+    painter.drawPath(panelPath);
+    drawHudCorners(painter, panel.adjusted(8, 8, -8, -8), QColor(255, 143, 44), 70);
 
-    painter.setPen(QColor(28, 40, 34));
+    painter.setPen(QColor(255, 224, 186));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 26, QFont::Bold));
     painter.drawText(QRect(panel.left(), panel.top() + 26, panel.width(), 46),
                      Qt::AlignCenter,
                      QStringLiteral("本副结算"));
 
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 15, QFont::Bold));
-    painter.setPen(QColor(58, 91, 60));
+    painter.setPen(QColor(160, 217, 255));
     painter.drawText(QRect(panel.left() + 36, panel.top() + 86, panel.width() - 72, 34),
                      Qt::AlignCenter,
                      QStringLiteral("队伍%1获胜  升级%2级  下一副打%3")
@@ -662,13 +752,13 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
         const int playerId = order[i];
         const guandan::Player& player = engine_->player(playerId);
         const QRect row(ranking.left(), ranking.top() + i * 44, ranking.width(), 34);
-        const QColor rowColor = i == 0 ? QColor(229, 194, 82, 210) : QColor(255, 255, 255, 150);
+        const QColor rowColor = i == 0 ? QColor(171, 81, 22, 210) : QColor(14, 22, 31, 210);
 
         QPainterPath rowPath;
         rowPath.addRoundedRect(row, 8, 8);
         painter.fillPath(rowPath, rowColor);
 
-        painter.setPen(QColor(32, 43, 38));
+        painter.setPen(i == 0 ? QColor(255, 241, 218) : QColor(224, 235, 242));
         painter.drawText(row.adjusted(16, 0, -16, 0),
                          Qt::AlignVCenter | Qt::AlignLeft,
                          QStringLiteral("%1  %2").arg(placeText(i + 1), QString::fromStdString(player.name)));
@@ -678,11 +768,12 @@ void TableWidget::drawSettlementOverlay(QPainter& painter)
     }
 
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold));
-    painter.setPen(QColor(65, 78, 68));
+    painter.setPen(QColor(255, 201, 132));
     painter.drawText(QRect(panel.left() + 48, panel.bottom() - 62, panel.width() - 96, 28),
                      Qt::AlignCenter,
                      QStringLiteral("第%1副结束").arg(engine_->dealNumber()));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
+    painter.setPen(QColor(191, 215, 226));
     painter.drawText(QRect(panel.left() + 48, panel.bottom() - 36, panel.width() - 96, 22),
                      Qt::AlignCenter,
                      QStringLiteral("队伍0：%1    队伍1：%2")
@@ -708,18 +799,21 @@ void TableWidget::drawArrangeButton(QPainter& painter, const QRect& playerArea)
 
     QPainterPath shadow;
     shadow.addRoundedRect(arrangeButtonRect_.translated(0, 3), 9, 9);
-    painter.fillPath(shadow, QColor(0, 0, 0, 70));
+    painter.fillPath(shadow, QColor(0, 0, 0, 112));
 
     QPainterPath button;
     button.addRoundedRect(arrangeButtonRect_, 9, 9);
     QLinearGradient gradient(arrangeButtonRect_.topLeft(), arrangeButtonRect_.bottomLeft());
-    gradient.setColorAt(0.0, QColor(255, 243, 150));
-    gradient.setColorAt(1.0, QColor(239, 176, 55));
+    gradient.setColorAt(0.0, QColor(42, 47, 57));
+    gradient.setColorAt(1.0, QColor(12, 15, 21));
     painter.fillPath(button, gradient);
-    painter.setPen(QPen(QColor(87, 61, 19), 1));
+    painter.setPen(QPen(QColor(255, 143, 44, 216), 1));
     painter.drawPath(button);
+    painter.setPen(QPen(QColor(156, 211, 246, 110), 1));
+    painter.drawLine(arrangeButtonRect_.left() + 12, arrangeButtonRect_.top() + 4,
+                     arrangeButtonRect_.right() - 12, arrangeButtonRect_.top() + 4);
 
-    painter.setPen(QColor(43, 34, 18));
+    painter.setPen(QColor(255, 224, 186));
     painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
     painter.drawText(arrangeButtonRect_, Qt::AlignCenter, QStringLiteral("一键理牌"));
     painter.restore();
