@@ -39,7 +39,6 @@ private:
     QPushButton* playButton_ = nullptr;
     QPushButton* passButton_ = nullptr;
     QPushButton* hintButton_ = nullptr;
-    QPushButton* sortButton_ = nullptr;
     QPushButton* nextDealButton_ = nullptr;
     bool aiTurnPending_ = false;
 };
