@@ -176,7 +176,6 @@ bool GameEngine::playSelectedCards(int playerId, const std::vector<int>& cardIds
             player.hand.erase(player.hand.begin() + index);
         }
     }
-    sortHand(player.hand, currentLevel_);
 
     lastPlay_ = { playerId, selected, analysis };
     lastShownCards_[playerId] = selected;
