@@ -1,0 +1,317 @@
+#include "TableWidget.h"
+
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+
+#include <algorithm>
+#include <map>
+
+namespace {
+
+constexpr int kCardWidth = 72;
+constexpr int kCardHeight = 104;
+
+QColor suitColor(guandan::Suit suit, guandan::Rank rank)
+{
+    if (rank == guandan::Rank::BigJoker) {
+        return QColor(180, 30, 40);
+    }
+    if (rank == guandan::Rank::SmallJoker) {
+        return QColor(30, 40, 60);
+    }
+    if (suit == guandan::Suit::Hearts || suit == guandan::Suit::Diamonds) {
+        return QColor(190, 30, 45);
+    }
+    return QColor(22, 30, 42);
+}
+
+QString qCardRank(guandan::Rank rank)
+{
+    return QString::fromStdString(guandan::rankText(rank));
+}
+
+QString qCardSuit(guandan::Suit suit)
+{
+    switch (suit) {
+    case guandan::Suit::Spades: return QStringLiteral("♠");
+    case guandan::Suit::Hearts: return QStringLiteral("♥");
+    case guandan::Suit::Clubs: return QStringLiteral("♣");
+    case guandan::Suit::Diamonds: return QStringLiteral("♦");
+    case guandan::Suit::Joker: return QStringLiteral("★");
+    }
+    return QStringLiteral("?");
+}
+
+class CardPixmapCache {
+public:
+    QPixmap pixmap(const guandan::Card& card, bool faceUp, int levelValue, bool wild)
+    {
+        const QString key = QStringLiteral("%1-%2-%3-%4-%5")
+                                .arg(card.id)
+                                .arg(static_cast<int>(card.suit))
+                                .arg(static_cast<int>(card.rank))
+                                .arg(faceUp)
+                                .arg(levelValue + (wild ? 100 : 0));
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            return it->second;
+        }
+
+        QPixmap pixmap(kCardWidth * 2, kCardHeight * 2);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.scale(2.0, 2.0);
+
+        QRect rect(1, 1, kCardWidth - 2, kCardHeight - 2);
+        QPainterPath path;
+        path.addRoundedRect(rect, 8, 8);
+        painter.fillPath(path, faceUp ? QColor(252, 250, 244) : QColor(44, 91, 170));
+        painter.setPen(QPen(QColor(28, 31, 36), 1));
+        painter.drawPath(path);
+
+        if (!faceUp) {
+            painter.setPen(QPen(QColor(230, 238, 255), 2));
+            for (int y = 14; y < kCardHeight; y += 14) {
+                painter.drawLine(12, y, kCardWidth - 12, y + 16);
+            }
+            painter.setFont(QFont(QStringLiteral("Segoe UI"), 18, QFont::Bold));
+            painter.drawText(rect, Qt::AlignCenter, QStringLiteral("GD"));
+        } else {
+            const QColor color = suitColor(card.suit, card.rank);
+            painter.setPen(color);
+            painter.setFont(QFont(QStringLiteral("Segoe UI"), 15, QFont::Bold));
+            painter.drawText(QRect(7, 5, kCardWidth - 14, 24), Qt::AlignLeft, qCardRank(card.rank));
+            painter.setFont(QFont(QStringLiteral("Segoe UI Symbol"), 18));
+            painter.drawText(QRect(7, 28, kCardWidth - 14, 24), Qt::AlignLeft, qCardSuit(card.suit));
+
+            painter.setFont(QFont(QStringLiteral("Segoe UI Symbol"), 28, QFont::Bold));
+            painter.drawText(QRect(0, 35, kCardWidth, 42), Qt::AlignCenter, qCardSuit(card.suit));
+
+            if (wild) {
+                painter.setPen(QPen(QColor(219, 126, 20), 2));
+                painter.drawRoundedRect(QRect(5, 5, kCardWidth - 10, kCardHeight - 10), 7, 7);
+                painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 8, QFont::Bold));
+                painter.drawText(QRect(0, kCardHeight - 21, kCardWidth, 18), Qt::AlignCenter, QStringLiteral("逢人配"));
+            }
+        }
+
+        cache_[key] = pixmap;
+        return pixmap;
+    }
+
+private:
+    std::map<QString, QPixmap> cache_;
+};
+
+CardPixmapCache& cardCache()
+{
+    static CardPixmapCache cache;
+    return cache;
+}
+
+} // namespace
+
+TableWidget::TableWidget(QWidget* parent)
+    : QWidget(parent)
+{
+    setMouseTracking(true);
+    setAutoFillBackground(false);
+}
+
+void TableWidget::setEngine(guandan::GameEngine* engine)
+{
+    engine_ = engine;
+    clearSelection();
+    update();
+}
+
+std::vector<int> TableWidget::selectedCardIds() const
+{
+    return { selectedIds_.begin(), selectedIds_.end() };
+}
+
+void TableWidget::setSelectedCardIds(const std::vector<int>& ids)
+{
+    selectedIds_.clear();
+    for (int id : ids) {
+        selectedIds_.insert(id);
+    }
+    emit selectionChanged();
+    update();
+}
+
+void TableWidget::clearSelection()
+{
+    selectedIds_.clear();
+    emit selectionChanged();
+    update();
+}
+
+QSize TableWidget::minimumSizeHint() const
+{
+    return QSize(960, 680);
+}
+
+void TableWidget::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillRect(rect(), QColor(42, 112, 82));
+
+    QRect table = rect().adjusted(22, 18, -22, -18);
+    QPainterPath tablePath;
+    tablePath.addRoundedRect(table, 18, 18);
+    painter.fillPath(tablePath, QColor(36, 128, 86));
+    painter.setPen(QPen(QColor(224, 235, 218, 110), 2));
+    painter.drawPath(tablePath);
+
+    if (!engine_) {
+        painter.setPen(Qt::white);
+        painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 20, QFont::Bold));
+        painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("掼蛋"));
+        return;
+    }
+
+    clickableCards_.clear();
+
+    const QRect bottom(width() / 2 - 390, height() - 145, 780, 126);
+    const QRect top(width() / 2 - 300, 28, 600, 110);
+    const QRect left(25, height() / 2 - 105, 230, 170);
+    const QRect right(width() - 255, height() / 2 - 105, 230, 170);
+
+    drawPlayerHand(painter, visualPlayerForSeat(2), top, false, false);
+    drawPlayerHand(painter, visualPlayerForSeat(1), left, false, false);
+    drawPlayerHand(painter, visualPlayerForSeat(3), right, false, false);
+    drawPlayerHand(painter, visualPlayerForSeat(0), bottom, true, true);
+
+    drawLastCards(painter, visualPlayerForSeat(2), QRect(width() / 2 - 210, 154, 420, 110));
+    drawLastCards(painter, visualPlayerForSeat(1), QRect(width() / 2 - 360, height() / 2 - 70, 260, 110));
+    drawLastCards(painter, visualPlayerForSeat(3), QRect(width() / 2 + 100, height() / 2 - 70, 260, 110));
+    drawLastCards(painter, visualPlayerForSeat(0), QRect(width() / 2 - 230, height() / 2 + 78, 460, 110));
+
+    painter.setPen(QColor(245, 248, 241));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold));
+    painter.drawText(QRect(34, 26, 430, 26), Qt::AlignLeft, QString::fromStdString(engine_->tableStatus()));
+}
+
+void TableWidget::mousePressEvent(QMouseEvent* event)
+{
+    if (!engine_) {
+        return;
+    }
+    for (const auto& [id, rect] : clickableCards_) {
+        if (rect.contains(event->pos())) {
+            if (selectedIds_.count(id)) {
+                selectedIds_.erase(id);
+            } else {
+                selectedIds_.insert(id);
+            }
+            emit selectionChanged();
+            update();
+            return;
+        }
+    }
+}
+
+QRect TableWidget::cardRectForIndex(int index, int count, const QRect& area, bool selected) const
+{
+    const int overlapWidth = std::max(24, std::min(kCardWidth, area.width() / std::max(1, count)));
+    const int fullWidth = overlapWidth * (count - 1) + kCardWidth;
+    const int startX = area.center().x() - fullWidth / 2;
+    const int y = area.top() + (area.height() - kCardHeight) / 2 - (selected ? 18 : 0);
+    return QRect(startX + index * overlapWidth, y, kCardWidth, kCardHeight);
+}
+
+void TableWidget::drawPlayerHand(QPainter& painter, int playerId, const QRect& area, bool faceUp, bool interactive)
+{
+    const guandan::Player& player = engine_->player(playerId);
+
+    painter.setPen(QColor(245, 248, 241));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 11, QFont::Bold));
+    painter.drawText(area.adjusted(0, -24, 0, -area.height()), Qt::AlignCenter, playerLabel(playerId));
+
+    if (player.finished) {
+        painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 14, QFont::Bold));
+        painter.drawText(area, Qt::AlignCenter, QStringLiteral("已出完"));
+        return;
+    }
+
+    const int count = static_cast<int>(player.hand.size());
+    for (int i = 0; i < count; ++i) {
+        const guandan::Card& card = player.hand[i];
+        const bool selected = selectedIds_.count(card.id) > 0 && interactive;
+        const QRect cardRect = cardRectForIndex(i, count, area, selected);
+        drawCard(painter, cardRect, card, faceUp, selected);
+        if (interactive && faceUp) {
+            clickableCards_[card.id] = cardRect;
+        }
+    }
+
+    if (!faceUp) {
+        painter.setPen(QColor(245, 248, 241));
+        painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10));
+        painter.drawText(area.adjusted(0, kCardHeight + 2, 0, 0), Qt::AlignCenter,
+                         QStringLiteral("余牌 %1").arg(count));
+    }
+}
+
+void TableWidget::drawLastCards(QPainter& painter, int playerId, const QRect& area)
+{
+    const std::vector<guandan::Card>& cards = engine_->lastShownCards()[playerId];
+    if (cards.empty()) {
+        return;
+    }
+
+    painter.setPen(QColor(236, 240, 230));
+    painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 9));
+    painter.drawText(area.adjusted(0, -20, 0, 0), Qt::AlignTop | Qt::AlignHCenter, playerLabel(playerId));
+
+    const int count = static_cast<int>(cards.size());
+    const int miniWidth = 46;
+    const int miniHeight = 66;
+    const int spacing = std::min(34, area.width() / std::max(1, count));
+    const int fullWidth = spacing * (count - 1) + miniWidth;
+    int x = area.center().x() - fullWidth / 2;
+    for (const guandan::Card& card : cards) {
+        QRect rect(x, area.top() + 20, miniWidth, miniHeight);
+        drawCard(painter, rect, card, true, false);
+        x += spacing;
+    }
+}
+
+void TableWidget::drawCard(QPainter& painter, const QRect& rect, const guandan::Card& card, bool faceUp, bool selected)
+{
+    const bool wild = engine_ && guandan::isWildCard(card, engine_->currentLevel());
+    QPixmap pixmap = cardCache().pixmap(card, faceUp, static_cast<int>(engine_->currentLevel()), wild);
+    painter.drawPixmap(rect, pixmap);
+    if (selected) {
+        painter.setPen(QPen(QColor(255, 220, 70), 3));
+        painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 8, 8);
+    }
+}
+
+QString TableWidget::playerLabel(int playerId) const
+{
+    const guandan::Player& player = engine_->player(playerId);
+    const QString team = playerId % 2 == 0 ? QStringLiteral("队伍0") : QStringLiteral("队伍1");
+    return QString::fromStdString(player.name) + QStringLiteral(" / ") + team +
+           QStringLiteral(" / 余牌 %1").arg(player.hand.size());
+}
+
+int TableWidget::visualPlayerForSeat(int seat) const
+{
+    if (!engine_) {
+        return seat;
+    }
+    if (engine_->mode() == guandan::GameMode::LocalFour) {
+        return (engine_->currentPlayer() + seat) % 4;
+    }
+    if (seat == 0) {
+        return 0;
+    }
+    return seat;
+}
+
