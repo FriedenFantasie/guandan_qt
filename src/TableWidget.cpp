@@ -109,6 +109,61 @@ QColor groupHintColor(int index)
     return colors[static_cast<std::size_t>(index) % colors.size()];
 }
 
+int visibleGroupPriority(guandan::HandType type)
+{
+    switch (type) {
+    case guandan::HandType::JokerBomb: return 1000;
+    case guandan::HandType::StraightFlush: return 960;
+    case guandan::HandType::Bomb: return 900;
+    case guandan::HandType::ConsecutiveTriples: return 820;
+    case guandan::HandType::TripleWithPair: return 780;
+    case guandan::HandType::ConsecutivePairs: return 720;
+    case guandan::HandType::Straight: return 680;
+    default: return 0;
+    }
+}
+
+std::vector<guandan::ArrangedGroup> inferGroupsInCurrentOrder(
+    const std::vector<guandan::Card>& hand,
+    guandan::Rank level)
+{
+    std::vector<guandan::ArrangedGroup> groups;
+    int index = 0;
+    const int count = static_cast<int>(hand.size());
+
+    while (index < count) {
+        guandan::HandAnalysis best;
+        int bestLength = 0;
+        int bestScore = 0;
+
+        const int maxLength = std::min(10, count - index);
+        for (int length = 2; length <= maxLength; ++length) {
+            std::vector<guandan::Card> segment(hand.begin() + index, hand.begin() + index + length);
+            const guandan::HandAnalysis analysis = guandan::HandAnalyzer::analyze(segment, level);
+            const guandan::ArrangedGroup probe{ index, length, analysis };
+            if (!shouldShowGroupHint(probe)) {
+                continue;
+            }
+
+            const int score = visibleGroupPriority(analysis.type) * 100 + length;
+            if (score > bestScore) {
+                best = analysis;
+                bestLength = length;
+                bestScore = score;
+            }
+        }
+
+        if (bestLength > 0) {
+            groups.push_back({ index, bestLength, best });
+            index += bestLength;
+        } else {
+            ++index;
+        }
+    }
+
+    return groups;
+}
+
 QColor hudAccentForBack(CardBackStyle style)
 {
     switch (style) {
@@ -574,12 +629,17 @@ void TableWidget::drawHandGroupHints(QPainter& painter, const std::vector<guanda
     }
 
     const guandan::ArrangedHand arranged = guandan::HandAnalyzer::arrangeHandWithGroups(hand, engine_->currentLevel());
-    if (!sameCardOrder(hand, arranged.cards)) {
+    std::vector<guandan::ArrangedGroup> groups;
+    if (sameCardOrder(hand, arranged.cards)) {
+        groups = arranged.groups;
+    } else if (arrangeModeActive_) {
+        groups = inferGroupsInCurrentOrder(hand, engine_->currentLevel());
+    } else {
         return;
     }
 
     int visibleGroupIndex = 0;
-    for (const guandan::ArrangedGroup& group : arranged.groups) {
+    for (const guandan::ArrangedGroup& group : groups) {
         if (!shouldShowGroupHint(group)) {
             continue;
         }
