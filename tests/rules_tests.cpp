@@ -17,6 +17,11 @@ Card c(int id, Suit suit, Rank rank)
     return Card{ id, suit, rank, 0 };
 }
 
+std::set<int> idSet(const std::vector<int>& ids)
+{
+    return { ids.begin(), ids.end() };
+}
+
 void testDeck()
 {
     const std::vector<Card> deck = makeTwoDecks();
@@ -246,6 +251,94 @@ void testAiLeadsUsefulCombinations()
     assert(analysis.type == HandType::TripleWithPair);
 }
 
+void testAiPreservesStrongCombinationsWhenResponding()
+{
+    GameEngine engine;
+    engine.startNewGame(GameMode::LocalFour);
+
+    const int leader = engine.currentPlayer();
+    const int responder = (leader + 1) % 4;
+    std::array<Player, 4>& players = const_cast<std::array<Player, 4>&>(engine.players());
+    players[static_cast<std::size_t>(leader)].hand = {
+        c(400, Suit::Spades, Rank::Four),
+        c(401, Suit::Hearts, Rank::Four),
+        c(402, Suit::Clubs, Rank::Three)
+    };
+    players[static_cast<std::size_t>(responder)].hand = {
+        c(410, Suit::Spades, Rank::Five),
+        c(411, Suit::Hearts, Rank::Five),
+        c(412, Suit::Spades, Rank::Six),
+        c(413, Suit::Spades, Rank::Seven),
+        c(414, Suit::Spades, Rank::Eight),
+        c(415, Suit::Spades, Rank::Nine),
+        c(416, Suit::Spades, Rank::King),
+        c(417, Suit::Hearts, Rank::King)
+    };
+
+    std::string error;
+    assert(engine.playSelectedCards(leader, { 400, 401 }, &error));
+    assert(engine.currentPlayer() == responder);
+
+    const AiDecision decision = AiPlayer::choose(engine, responder);
+    assert(!decision.pass);
+    assert(idSet(decision.cardIds) == std::set<int>({ 416, 417 }));
+}
+
+void testAiBombsOnlyUnderPressure()
+{
+    GameEngine engine;
+    engine.startNewGame(GameMode::LocalFour);
+
+    const int leader = engine.currentPlayer();
+    const int responder = (leader + 1) % 4;
+    std::array<Player, 4>& players = const_cast<std::array<Player, 4>&>(engine.players());
+    players[static_cast<std::size_t>(leader)].hand = {
+        c(500, Suit::Spades, Rank::Ace),
+        c(501, Suit::Hearts, Rank::Ace),
+        c(502, Suit::Clubs, Rank::Three),
+        c(503, Suit::Diamonds, Rank::Four),
+        c(504, Suit::Spades, Rank::Five),
+        c(505, Suit::Hearts, Rank::Six),
+        c(506, Suit::Clubs, Rank::Seven)
+    };
+    players[static_cast<std::size_t>(responder)].hand = {
+        c(510, Suit::Spades, Rank::Eight),
+        c(511, Suit::Hearts, Rank::Eight),
+        c(512, Suit::Clubs, Rank::Eight),
+        c(513, Suit::Diamonds, Rank::Eight),
+        c(514, Suit::Spades, Rank::Three),
+        c(515, Suit::Hearts, Rank::Five),
+        c(516, Suit::Clubs, Rank::Seven),
+        c(517, Suit::Diamonds, Rank::Nine)
+    };
+
+    std::string error;
+    assert(engine.playSelectedCards(leader, { 500, 501 }, &error));
+    assert(engine.currentPlayer() == responder);
+
+    const AiDecision patientDecision = AiPlayer::choose(engine, responder);
+    assert(patientDecision.pass);
+
+    GameEngine urgentEngine;
+    urgentEngine.startNewGame(GameMode::LocalFour);
+    const int urgentLeader = urgentEngine.currentPlayer();
+    const int urgentResponder = (urgentLeader + 1) % 4;
+    std::array<Player, 4>& urgentPlayers = const_cast<std::array<Player, 4>&>(urgentEngine.players());
+    urgentPlayers[static_cast<std::size_t>(urgentLeader)].hand = {
+        c(520, Suit::Spades, Rank::Ace),
+        c(521, Suit::Hearts, Rank::Ace),
+        c(522, Suit::Clubs, Rank::Three)
+    };
+    urgentPlayers[static_cast<std::size_t>(urgentResponder)].hand = players[static_cast<std::size_t>(responder)].hand;
+
+    assert(urgentEngine.playSelectedCards(urgentLeader, { 520, 521 }, &error));
+    assert(urgentEngine.currentPlayer() == urgentResponder);
+
+    const AiDecision urgentDecision = AiPlayer::choose(urgentEngine, urgentResponder);
+    assert(!urgentDecision.pass);
+    assert(idSet(urgentDecision.cardIds) == std::set<int>({ 510, 511, 512, 513 }));
+}
+
 void testFullDealCanFinish()
 {
     GameEngine engine;
@@ -280,6 +373,8 @@ int main()
     testEngineDealAndAiLegality();
     testPlayPreservesCurrentHandOrder();
     testAiLeadsUsefulCombinations();
+    testAiPreservesStrongCombinationsWhenResponding();
+    testAiBombsOnlyUnderPressure();
     testFullDealCanFinish();
     std::cout << "All Guandan rule tests passed.\n";
     return 0;
